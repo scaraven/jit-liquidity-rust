@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use ethers::{
     contract::abigen,
-    core::types::{Address, U256},
+    core::types::Address,
     middleware::SignerMiddleware,
-    providers::{Http, Middleware, Provider},
-    signers::{LocalWallet, Signer},
+    providers::{Provider, Http},
+    signers::LocalWallet,
 };
+
 use eyre::Result;
 
 abigen!(
@@ -26,13 +27,17 @@ abigen!(
     ]"#
 );
 
-async pub fn add_liquidity(
-    provider: &Arc<Provider<Http>>,
-    wallet: &LocalWallet,
-    tokenA: Address,
-    tokenB: address,
-    amountADesired: U256,
-    recipient: Address
-) -> Result<TxHash> {
+pub async fn fetch_token0(
+    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
+    pair: Address
+) -> Result<()> {
+    // Fetch contract
+    let contract = UniswapV2Pair::new(pair, client.clone());
 
+    let token0 = contract.token_0().call().await?;
+    let token0_address = Address::from(token0);
+
+    println!("Token0 address {}", token0_address);
+
+    Ok(())
 }

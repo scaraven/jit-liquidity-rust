@@ -1,12 +1,13 @@
 [package]
 name = "jit-liquidity-rust"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 ethers = "2.0"
 # Ethers' async features rely upon the Tokio async runtime.
-tokio = { version = "1", features = ["macros"] }
+tokio = { version = "1", features = ["full"] }
 # Flexible concrete Error Reporting type built on std::error::Error with customizable Reports
 eyre = "0.6"
+dotenv = "0.15.0"
 
