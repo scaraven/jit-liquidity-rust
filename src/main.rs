@@ -13,6 +13,12 @@ mod wallet;
 #[path = "interfaces/erc20.rs"]
 mod erc20;
 
+#[path = "utils/utils.rs"]
+mod utils;
+
+#[path = "utils/addresses.rs"]
+mod addresses;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Setup config file
@@ -22,8 +28,7 @@ async fn main() -> Result<()> {
     let provider = wallet::create_provider(&config.rpc_url);
     let chain_id = provider.get_chainid().await?;
 
-    // provider is now consumed
-    let client = wallet::create_signer(provider, &config.priv_key, chain_id.as_u64());
+    let client = wallet::create_signer(provider.clone(), &config.priv_key, chain_id.as_u64());
 
     // Fetch pair address
     let pair = "0xa2107fa5b38d9bbd2c461d6edf11b11a50f6b974".parse::<Address>()?;
@@ -34,7 +39,7 @@ async fn main() -> Result<()> {
     println!("Token0 address: {:?}", token0_address);
     println!("Token1 address: {:?}", token1_address);
 
-    let router_address = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d".parse::<Address>()?;
+    let router_address = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
 
     // Setup approvals for token0 and token1
     let _receipt = erc20::approve(
@@ -58,6 +63,28 @@ async fn main() -> Result<()> {
 
     println!("Token0 balance: {:?}", token0_balance);
     println!("Token1 balance: {:?}", token1_balance);
+
+    // Approve WETH to token0
+    let weth_address = addresses::get_address(addresses::WETH);
+    erc20::approve(&client, weth_address, router_address, U256::exp10(18)).await?;
+
+    // Swap ETH for token0
+    let amount_in = U256::exp10(18);
+    let amount_out_min = U256::zero();
+
+    let _receipt_three = router::swap_exact_ethfor_tokens(
+        &client,
+        router_address,
+        addresses::get_address(addresses::WETH),
+        token0_address,
+        amount_in,
+        amount_out_min,
+        utils::get_block_timestamp_future(&provider, U256::from(60)).await,
+    )
+    .await?;
+
+    let token0_balance_after = erc20::balance_of(&client, token0_address, router_address).await?;
+    println!("Token0 balance after swap: {:?}", token0_balance_after);
 
     Ok(())
 }

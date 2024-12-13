@@ -14,6 +14,7 @@ use eyre::Result;
 abigen!(
     UniswapV2Router,
     r"[
+        swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)
         addLiquidity(address tokenA,address tokenB, uint amountADesired, uint amountBDesired, uint amountAMin, uint amountBMin, address to, uint deadline) external returns (uint amountA, uint amountB, uint liquidity)
     ]"
 );
@@ -27,6 +28,13 @@ abigen!(
         token1()(address)
     ]"#
 );
+
+fn create_uniswap_v2_router(
+    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
+    router: Address,
+) -> Result<UniswapV2Router<SignerMiddleware<Provider<Http>, LocalWallet>>> {
+    Ok(UniswapV2Router::new(router, client.clone()))
+}
 
 pub async fn fetch_token0(
     client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
@@ -85,4 +93,32 @@ pub async fn increase_liquidity(
         .await?;
 
     Ok(receipt.unwrap())
+}
+
+pub async fn swap_exact_ethfor_tokens(
+    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
+    router: Address,
+    token_a: Address,
+    token_b: Address,
+    amount_eth: U256,
+    amount_out_min: U256,
+    deadline: U256,
+) -> Result<TransactionReceipt> {
+    // Fetch contract
+    let contract = create_uniswap_v2_router(&client, router).unwrap();
+
+    let path = vec![token_a, token_b];
+
+    let receipt_option = contract
+        .swap_exact_eth_for_tokens(amount_out_min, path, client.address(), deadline)
+        .value(amount_eth)
+        .send()
+        .await?
+        .await
+        .unwrap();
+
+    match receipt_option {
+        Some(receipt) => Ok(receipt),
+        None => Err(eyre::eyre!("SWAP_EXACT_ETH_FOR_TOKENS failed")),
+    }
 }

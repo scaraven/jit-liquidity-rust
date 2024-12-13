@@ -36,12 +36,16 @@ pub async fn approve(
 ) -> Result<TransactionReceipt> {
     let contract = create_erc20(client, token).unwrap();
 
-    let receipt_option = contract.approve(spender, amount).send().await?.await;
+    let receipt_option = contract
+        .approve(spender, amount)
+        .send()
+        .await?
+        .await
+        .unwrap();
 
     match receipt_option {
-        Ok(Some(receipt)) => Ok(receipt),
-        Ok(None) => Err(eyre::eyre!("APPROVE failed")),
-        Err(err) => Err(err.into()),
+        Some(receipt) => Ok(receipt),
+        None => Err(eyre::eyre!("APPROVE failed")),
     }
 }
 
