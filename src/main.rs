@@ -1,5 +1,5 @@
 use ethers::providers::Middleware;
-use ethers::types::Address;
+use ethers::types::{Address, U256};
 
 use eyre::Result;
 
@@ -9,6 +9,9 @@ mod config;
 mod router;
 #[path = "wallet.rs"]
 mod wallet;
+
+#[path = "interfaces/erc20.rs"]
+mod erc20;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -28,12 +31,33 @@ async fn main() -> Result<()> {
     let token0_address = router::fetch_token0(&client, pair).await?;
     let token1_address = router::fetch_token1(&client, pair).await?;
 
-    println!("Token0 address: {}", token0_address);
-    println!("Token1 address: {}", token1_address);
+    println!("Token0 address: {:?}", token0_address);
+    println!("Token1 address: {:?}", token1_address);
 
     let router_address = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d".parse::<Address>()?;
 
     // Setup approvals for token0 and token1
+    let _receipt = erc20::approve(
+        &client,
+        token0_address,
+        router_address,
+        U256::from(1e18 as u32),
+    )
+    .await?;
+    let _receipt_two = erc20::approve(
+        &client,
+        token1_address,
+        router_address,
+        U256::from(1e18 as u32),
+    )
+    .await?;
+
+    // Fetch token0 and token1 balances
+    let token0_balance = erc20::balance_of(&client, token0_address, router_address).await?;
+    let token1_balance = erc20::balance_of(&client, token1_address, router_address).await?;
+
+    println!("Token0 balance: {:?}", token0_balance);
+    println!("Token1 balance: {:?}", token1_balance);
 
     Ok(())
 }
