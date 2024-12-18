@@ -11,6 +11,8 @@ use ethers::{
 
 use eyre::Result;
 
+use crate::addresses;
+
 abigen!(
     UniswapV2Router,
     r"[
@@ -32,8 +34,8 @@ abigen!(
 fn create_uniswap_v2_router(
     client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
     router: Address,
-) -> Result<UniswapV2Router<SignerMiddleware<Provider<Http>, LocalWallet>>> {
-    Ok(UniswapV2Router::new(router, client.clone()))
+) -> UniswapV2Router<SignerMiddleware<Provider<Http>, LocalWallet>> {
+    UniswapV2Router::new(router, client.clone())
 }
 
 pub async fn fetch_token0(
@@ -98,27 +100,29 @@ pub async fn increase_liquidity(
 pub async fn swap_exact_ethfor_tokens(
     client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
     router: Address,
-    token_a: Address,
     token_b: Address,
     amount_eth: U256,
     amount_out_min: U256,
     deadline: U256,
 ) -> Result<TransactionReceipt> {
     // Fetch contract
-    let contract = create_uniswap_v2_router(&client, router).unwrap();
+    let contract = create_uniswap_v2_router(&client, router);
 
-    let path = vec![token_a, token_b];
+    let path = vec![addresses::get_address(addresses::WETH), token_b];
 
-    let receipt_option = contract
+    let swap_call = contract
         .swap_exact_eth_for_tokens(amount_out_min, path, client.address(), deadline)
-        .value(amount_eth)
-        .send()
-        .await?
-        .await
-        .unwrap();
+        .value(amount_eth);
 
-    match receipt_option {
-        Some(receipt) => Ok(receipt),
-        None => Err(eyre::eyre!("SWAP_EXACT_ETH_FOR_TOKENS failed")),
+    let pending_tx = swap_call.send().await.or_else(|e| {
+        Err(eyre::eyre!(
+            "Error swapping ETH for tokens: {:?}",
+            e.to_string()
+        ))
+    });
+
+    match pending_tx {
+        Ok(tx) => Ok(tx.await?.unwrap_or(TransactionReceipt::default())),
+        Err(e) => Err(e),
     }
 }

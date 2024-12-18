@@ -43,10 +43,8 @@ pub async fn approve(
         .await
         .unwrap();
 
-    match receipt_option {
-        Some(receipt) => Ok(receipt),
-        None => Err(eyre::eyre!("APPROVE failed")),
-    }
+    // Checke whether we got an approve event
+    Ok(receipt_option.unwrap())
 }
 
 pub async fn balance_of(
