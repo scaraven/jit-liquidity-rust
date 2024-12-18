@@ -17,18 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-
-    - name: Cache Foundry
-      uses: actions/cache@v3
       with:
-        path: ~/.foundry
-        key: ${{ runner.os }}-foundry
+            submodules: recursive
 
     - name: Install Foundry
-      run: |
-        curl -L https://foundry.paradigm.xyz | bash
-        source /home/runner/.bashrc
-        foundryup
+      uses: foundry-rs/foundry-toolchain@v1
 
     - name: Build
       run: cargo build --verbose
