@@ -3,6 +3,9 @@ use ethers::types::U256;
 
 use eyre::Result;
 
+#[path = "config.rs"]
+mod config;
+
 #[path = "uniswap/router.rs"]
 mod router;
 
@@ -20,7 +23,9 @@ mod addresses;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let (provider, client, _anvil) = utils::setup().await?;
+    let config = config::Config::load();
+
+    let (provider, client, _anvil) = utils::setup(config).await?;
 
     let eth_balance = provider.get_balance(client.address(), None).await?;
     println!("ETH balance: {:?}", eth_balance);

@@ -58,3 +58,41 @@ pub async fn balance_of(
 
     Ok(U256::from(balance))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::addresses;
+    use crate::config;
+    use crate::utils;
+
+    #[tokio::test]
+    async fn check_balance_zero() {
+        let random_addr = addresses::get_address("0x8BB0080aC1006D407dfe84D29013964aCC1b9C00");
+        let whale_addr = addresses::get_address("0xD6c32E35D6A169C77786430ac7b257fF6bb480C3");
+
+        let config = config::Config::load();
+        let (_provider, client, _anvil) = utils::setup(config).await.expect("UTIL_SETUP failed");
+
+        let balance_random = balance_of(
+            &client,
+            addresses::get_address(addresses::WETH),
+            random_addr,
+        )
+        .await
+        .expect("BALANCE_OF failed");
+        assert_eq!(balance_random.as_u64(), 0);
+
+        let balance_check = balance_of(
+            &client,
+            addresses::get_address(addresses::USDC_ADDR),
+            whale_addr,
+        )
+        .await
+        .expect("BALANCE_OF failed");
+
+        // Balance of the whale
+        assert_eq!(balance_check.as_u64(), 236000000000000);
+    }
+}

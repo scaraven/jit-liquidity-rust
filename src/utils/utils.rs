@@ -8,19 +8,18 @@ use ethers::{
 };
 use eyre::Result;
 
+use crate::config;
+
 #[path = "wallet.rs"]
 mod wallet;
 
-#[path = "../config.rs"]
-mod config;
-
-pub async fn setup() -> Result<(
+pub async fn setup(
+    config: config::Config,
+) -> Result<(
     Provider<Http>,
     Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
     AnvilInstance,
 )> {
-    let config = config::Config::load();
-
     let anvil_builder = match config.anvil_path {
         Some(path) => Anvil::at(path),
         None => Anvil::new(),
