@@ -8,14 +8,27 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  INFURA_URL: ${{ secrets.INFURA_URL }}
+  PRIVATE_URL: ${{ secrets.PRIVATE_URL }}
 
 jobs:
   build:
 
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
+
+    - name: Cache Foundry
+      uses: actions/cache@v3
+      with:
+        path: ~/.foundry
+        key: ${{ runner.os }}-foundry
+
+    - name: Install Foundry
+      run: |
+        curl -L https://foundry.paradigm.xyz | bash
+        foundryup
+
     - name: Build
       run: cargo build --verbose
     - name: Run tests
