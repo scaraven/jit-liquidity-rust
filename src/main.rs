@@ -1,6 +1,7 @@
 use ethers::providers::Middleware;
 use ethers::types::U256;
 
+use ethers::utils::Anvil;
 use eyre::Result;
 
 #[path = "config.rs"]
@@ -24,8 +25,15 @@ async fn main() -> Result<()> {
     // Setup config file
     let config = config::Config::load();
 
+    // Setup anvil
+    let anvil = match config.rpc_url {
+        Some(url) => Anvil::new().fork(url),
+        None => Anvil::new(),
+    }
+    .spawn();
+
     // Setup provider
-    let provider = wallet::create_provider(&config.rpc_url);
+    let provider = wallet::create_provider(anvil.endpoint().as_str());
     let chain_id = provider.get_chainid().await?;
 
     let client = wallet::create_signer(provider.clone(), &config.priv_key, chain_id.as_u64());

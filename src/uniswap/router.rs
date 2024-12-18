@@ -64,39 +64,6 @@ pub async fn fetch_token1(
     Ok(token0_address)
 }
 
-pub async fn increase_liquidity(
-    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-    router: Address,
-    token_a: Address,
-    token_b: Address,
-    amount_adesired: U256,
-    amount_bdesired: U256,
-    amount_amin: U256,
-    amount_bmin: U256,
-    to: Address,
-    deadline: U256,
-) -> Result<TransactionReceipt> {
-    // Fetch contract
-    let contract = UniswapV2Router::new(router, client.clone());
-
-    let receipt = contract
-        .add_liquidity(
-            token_a,
-            token_b,
-            amount_adesired,
-            amount_bdesired,
-            amount_amin,
-            amount_bmin,
-            to,
-            deadline,
-        )
-        .send()
-        .await?
-        .await?;
-
-    Ok(receipt.unwrap())
-}
-
 pub async fn swap_exact_ethfor_tokens(
     client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
     router: Address,
