@@ -1,18 +1,16 @@
 use ethers::providers::Middleware;
 use ethers::types::U256;
 
-use ethers::utils::Anvil;
 use eyre::Result;
 
-#[path = "config.rs"]
-mod config;
 #[path = "uniswap/router.rs"]
 mod router;
-#[path = "wallet.rs"]
-mod wallet;
 
 #[path = "interfaces/erc20.rs"]
 mod erc20;
+
+#[path = "utils/blockchain_utils.rs"]
+mod blockchain_utils;
 
 #[path = "utils/utils.rs"]
 mod utils;
@@ -22,21 +20,7 @@ mod addresses;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Setup config file
-    let config = config::Config::load();
-
-    // Setup anvil
-    let anvil = match config.rpc_url {
-        Some(url) => Anvil::new().fork(url),
-        None => Anvil::new(),
-    }
-    .spawn();
-
-    // Setup provider
-    let provider = wallet::create_provider(anvil.endpoint().as_str());
-    let chain_id = provider.get_chainid().await?;
-
-    let client = wallet::create_signer(provider.clone(), &config.priv_key, chain_id.as_u64());
+    let (provider, client, _anvil) = utils::setup().await?;
 
     let eth_balance = provider.get_balance(client.address(), None).await?;
     println!("ETH balance: {:?}", eth_balance);
@@ -89,7 +73,7 @@ async fn main() -> Result<()> {
         token0_address,
         amount_in,
         amount_out_min,
-        utils::get_block_timestamp_future(&provider, U256::from(60)).await,
+        blockchain_utils::get_block_timestamp_future(&provider, U256::from(60)).await,
     )
     .await?;
 
@@ -99,7 +83,7 @@ async fn main() -> Result<()> {
         token1_address,
         amount_in,
         amount_out_min,
-        utils::get_block_timestamp_future(&provider, U256::from(60)).await,
+        blockchain_utils::get_block_timestamp_future(&provider, U256::from(60)).await,
     )
     .await?;
 
