@@ -9,7 +9,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   INFURA_URL: ${{ secrets.INFURA_URL }}
-  PRIVATE_URL: ${{ secrets.PRIVATE_URL }}
+  PRIVATE_KEY: ${{ secrets.PRIVATE_URL }}
 
 jobs:
   build:
