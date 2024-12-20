@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master", "dev_ops" ]
   pull_request:
     branches: [ "master" ]
 
@@ -11,19 +11,25 @@ env:
   INFURA_URL: ${{ secrets.INFURA_URL }}
   PRIVATE_KEY: ${{ secrets.PRIVATE_URL }}
 
+
 jobs:
   build:
 
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-            submodules: recursive
+      - uses: actions/checkout@v4
+        with:
+              submodules: recursive
 
-    - name: Install Foundry
-      uses: foundry-rs/foundry-toolchain@v1
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
 
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - name: Build
+        run: cargo build --verbose
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run tests
+        run: cargo test --verbose -- --test-threads=${{ env.TEST_THREADS }}
