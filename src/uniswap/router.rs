@@ -93,3 +93,30 @@ pub async fn swap_exact_ethfor_tokens(
         Err(e) => Err(e),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testconfig;
+
+    #[tokio::test]
+    async fn test_token_fetch() {
+        let config = testconfig::TestConfig::load();
+        let (_provider, client) = crate::utils::setup(
+            config
+                .anvil_endpoint
+                .expect("ANVIL_ENDPOINT does not exist")
+                .as_str(),
+            config.priv_key.as_str(),
+        )
+        .await
+        .expect("UTILS_SETUP failed");
+
+        let pair = addresses::get_address(addresses::WETH_USDC_PAIR);
+        let token0 = addresses::get_address(addresses::USDC_ADDR);
+        let token1 = addresses::get_address(addresses::WETH);
+
+        assert_eq!(fetch_token0(&client, pair).await.unwrap(), token0);
+        assert_eq!(fetch_token1(&client, pair).await.unwrap(), token1);
+    }
+}
