@@ -21,9 +21,13 @@ jobs:
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
 
       - name: Build
         run: cargo build --verbose
 
       - name: Run tests
-        run: cargo test --verbose -- --test-threads=${{ vars.TEST_THREADS }}
+        run: cargo test --verbose -- --test-threads=${{ env.TEST_THREADS }}
+        env:
+          TEST_THREADS: 10
