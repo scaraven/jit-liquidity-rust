@@ -10,7 +10,6 @@ env:
   CARGO_TERM_COLOR: always
   INFURA_URL: ${{ secrets.INFURA_URL }}
   PRIVATE_KEY: ${{ secrets.PRIVATE_URL }}
-  TEST_THREADS: 1
 
 jobs:
   build:
@@ -18,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-              submodules: recursive
+          submodules: recursive
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -28,19 +27,3 @@ jobs:
 
       - name: Run tests
         run: cargo test --verbose -- --test-threads=${{ vars.TEST_THREADS }}
-
-  test:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: nightly
-
-      - name: Run tests
-        run: cargo test --verbose -- --test-threads=${{ env.TEST_THREADS }}
