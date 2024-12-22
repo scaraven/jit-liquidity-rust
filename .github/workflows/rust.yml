@@ -2,28 +2,36 @@ name: Rust
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master", "dev_ops" ]
   pull_request:
     branches: [ "master" ]
 
 env:
   CARGO_TERM_COLOR: always
   INFURA_URL: ${{ secrets.INFURA_URL }}
-  PRIVATE_KEY: ${{ secrets.PRIVATE_URL }}
+  PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-            submodules: recursive
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-    - name: Install Foundry
-      uses: foundry-rs/foundry-toolchain@v1
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
 
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - name: Build
+        run: cargo build --verbose
+
+      - name: Run tests
+        run: |
+          chmod +x ./run-tests.sh
+          ./run-tests.sh
+        shell: bash
+        env:
+          ANVIL_ENDPOINT: http://127.0.0.1:8545
+          TEST_PRIVATE_KEY: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"

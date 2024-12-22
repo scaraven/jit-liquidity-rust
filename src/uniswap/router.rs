@@ -81,15 +81,139 @@ pub async fn swap_exact_ethfor_tokens(
         .swap_exact_eth_for_tokens(amount_out_min, path, client.address(), deadline)
         .value(amount_eth);
 
-    let pending_tx = swap_call.send().await.or_else(|e| {
-        Err(eyre::eyre!(
-            "Error swapping ETH for tokens: {:?}",
-            e.to_string()
-        ))
-    });
+    let pending_tx = swap_call.send().await.or_else(|e| Err(e));
 
     match pending_tx {
         Ok(tx) => Ok(tx.await?.unwrap_or(TransactionReceipt::default())),
-        Err(e) => Err(e),
+        Err(e) => Err(e.into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use ethers::{
+        contract::ContractError, core::k256::ecdsa, providers::Middleware, signers::Wallet,
+    };
+
+    use super::*;
+    use crate::{blockchain_utils, erc20::balance_of, testconfig};
+
+    #[tokio::test]
+    async fn test_token_fetch() {
+        let config = testconfig::TestConfig::load();
+        let (_provider, client) = crate::utils::setup(
+            config
+                .anvil_endpoint
+                .expect("ANVIL_ENDPOINT does not exist")
+                .as_str(),
+            config.priv_key.as_str(),
+        )
+        .await
+        .expect("UTILS_SETUP failed");
+
+        let pair = addresses::get_address(addresses::WETH_USDC_PAIR);
+        let token0 = addresses::get_address(addresses::USDC_ADDR);
+        let token1 = addresses::get_address(addresses::WETH);
+
+        assert_eq!(fetch_token0(&client, pair).await.unwrap(), token0);
+        assert_eq!(fetch_token1(&client, pair).await.unwrap(), token1);
+    }
+
+    #[tokio::test]
+    async fn test_swap_exact_eth_for_tokens_positive() {
+        let config = testconfig::TestConfig::load();
+        let (provider, client) = crate::utils::setup(
+            config
+                .anvil_endpoint
+                .expect("ANVIL_ENDPOINT does not exist")
+                .as_str(),
+            config.priv_key.as_str(),
+        )
+        .await
+        .expect("UTILS_SETUP failed");
+
+        let router = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
+
+        // Assert that we currently have enough ETH
+        let eth_balance = provider.get_balance(client.address(), None).await.unwrap();
+        assert!(eth_balance > U256::from(1e18 as u32));
+
+        let token_b = addresses::get_address(addresses::USDC_ADDR);
+        let amount_out_min = U256::zero();
+        let deadline =
+            blockchain_utils::get_block_timestamp_future(&provider, U256::from(600)).await;
+
+        // Make sure we do not hold any USDC
+        let balance = balance_of(&client, token_b, client.address())
+            .await
+            .unwrap();
+
+        let receipt = swap_exact_ethfor_tokens(
+            &client,
+            router,
+            token_b,
+            U256::from(1e18 as u32),
+            amount_out_min,
+            deadline,
+        )
+        .await
+        .expect("SWAP_EXACT_ETH_FOR_TOKENS failed");
+
+        assert_eq!(receipt.status.unwrap().as_u64(), 1);
+        assert!(
+            balance_of(&client, token_b, client.address())
+                .await
+                .unwrap()
+                > balance + amount_out_min
+        );
+    }
+
+    #[tokio::test]
+    async fn test_swap_exact_eth_for_tokens_with_invalid_deadline() {
+        let config = testconfig::TestConfig::load();
+        let (provider, client) = crate::utils::setup(
+            config
+                .anvil_endpoint
+                .expect("ANVIL_ENDPOINT does not exist")
+                .as_str(),
+            config.priv_key.as_str(),
+        )
+        .await
+        .expect("UTILS_SETUP failed");
+
+        let router = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
+
+        // Assert that we currently have enough ETH
+        let eth_balance = provider.get_balance(client.address(), None).await.unwrap();
+        assert!(eth_balance >= U256::exp10(18));
+
+        let token_b = addresses::get_address(addresses::USDC_ADDR);
+        let amount_out_min = U256::from(0);
+        let mut deadline =
+            blockchain_utils::get_block_timestamp_future(&provider, U256::from(0)).await;
+
+        deadline = deadline - U256::from(10);
+
+        let receipt = swap_exact_ethfor_tokens(
+            &client,
+            router,
+            token_b,
+            U256::exp10(18),
+            amount_out_min,
+            deadline,
+        )
+        .await;
+
+        assert!(receipt.is_err());
+        let err = receipt.unwrap_err();
+        let root = err.root_cause();
+
+        // Check if the root cause is specifically a ContractError::Revert
+        if let Some(contract_error) = root.downcast_ref::<ContractError<SignerMiddleware<Provider<Http>, Wallet<ecdsa::SigningKey>>>>() {
+            assert!(matches!(contract_error, ContractError::Revert(_)), "Expected a ContractError::Revert, but got a different error type.");
+        } else {
+            assert!(false, "Expected a ContractError, but got a different error type.");
+        }
     }
 }
