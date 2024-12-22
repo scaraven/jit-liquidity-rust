@@ -9,7 +9,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   INFURA_URL: ${{ secrets.INFURA_URL }}
-  PRIVATE_KEY: ${{ secrets.PRIVATE_URL }}
+  PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
 
 jobs:
   build:
@@ -28,6 +28,9 @@ jobs:
         run: cargo build --verbose
 
       - name: Run tests
-        run: cargo test --verbose -- --test-threads=${{ env.TEST_THREADS }}
+        run: |
+          chmod +x ./run-tests.sh
+          ./run-tests.sh
+        shell: bash
         env:
-          TEST_THREADS: 10
+          ANVIL_ENDPOINT: http://127.0.0.1:8545

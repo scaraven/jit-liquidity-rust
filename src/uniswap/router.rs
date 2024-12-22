@@ -81,19 +81,19 @@ pub async fn swap_exact_ethfor_tokens(
         .swap_exact_eth_for_tokens(amount_out_min, path, client.address(), deadline)
         .value(amount_eth);
 
-    let pending_tx = swap_call.send().await.or_else(|e| Err(eyre::eyre!(e)));
+    let pending_tx = swap_call.send().await.or_else(|e| Err(e));
 
     match pending_tx {
         Ok(tx) => Ok(tx.await?.unwrap_or(TransactionReceipt::default())),
-        Err(e) => Err(e),
+        Err(e) => Err(e.into()),
     }
 }
 
 #[cfg(test)]
 mod tests {
+
     use ethers::{
-        contract::{ContractError, ContractRevert},
-        providers::Middleware,
+        contract::ContractError, core::k256::ecdsa, providers::Middleware, signers::Wallet,
     };
 
     use super::*;
@@ -207,8 +207,13 @@ mod tests {
 
         assert!(receipt.is_err());
         let err = receipt.unwrap_err();
-        println!("{:#?}", err);
+        let root = err.root_cause();
 
-        assert!(false);
+        // Check if the root cause is specifically a ContractError::Revert
+        if let Some(contract_error) = root.downcast_ref::<ContractError<SignerMiddleware<Provider<Http>, Wallet<ecdsa::SigningKey>>>>() {
+            assert!(matches!(contract_error, ContractError::Revert(_)), "Expected a ContractError::Revert, but got a different error type.");
+        } else {
+            assert!(false, "Expected a ContractError, but got a different error type.");
+        }
     }
 }

@@ -32,7 +32,7 @@ fi
 
 # Run cargo test
 echo "Running cargo test..."
-if cargo test; then
+if cargo test -- --test-threads=1; then
     echo "Tests completed successfully."
 else
     echo "Tests failed."
