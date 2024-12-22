@@ -11,11 +11,11 @@ mod router;
 #[path = "interfaces/erc20.rs"]
 mod erc20;
 
-#[path = "utils/blockchain_utils.rs"]
-mod blockchain_utils;
-
 #[path = "utils/utils.rs"]
 mod utils;
+
+#[path = "utils/setup.rs"]
+mod setup;
 
 #[path = "utils/addresses.rs"]
 mod addresses;
@@ -28,9 +28,9 @@ mod testconfig;
 async fn main() -> Result<()> {
     let config = config::Config::load();
 
-    let anvil = utils::setup_anvil(config.anvil_path.as_deref(), config.rpc_url.as_deref()).await?;
+    let anvil = setup::setup_anvil(config.anvil_path.as_deref(), config.rpc_url.as_deref()).await?;
     let (provider, client) =
-        utils::setup(anvil.endpoint().as_str(), config.priv_key.as_str()).await?;
+        setup::setup(anvil.endpoint().as_str(), config.priv_key.as_str()).await?;
 
     let eth_balance = provider.get_balance(client.address(), None).await?;
     println!("ETH balance: {:?}", eth_balance);
@@ -83,7 +83,7 @@ async fn main() -> Result<()> {
         token0_address,
         amount_in,
         amount_out_min,
-        blockchain_utils::get_block_timestamp_future(&provider, U256::from(60)).await,
+        utils::get_block_timestamp_future(&provider, U256::from(60)).await,
     )
     .await?;
 
@@ -93,7 +93,7 @@ async fn main() -> Result<()> {
         token1_address,
         amount_in,
         amount_out_min,
-        blockchain_utils::get_block_timestamp_future(&provider, U256::from(60)).await,
+        utils::get_block_timestamp_future(&provider, U256::from(60)).await,
     )
     .await?;
 

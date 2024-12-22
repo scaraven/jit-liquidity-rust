@@ -60,7 +60,6 @@ pub async fn balance_of(
     Ok(U256::from(balance))
 }
 
-#[cfg(test)]
 pub async fn allowance(
     client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
     token: Address,
@@ -79,23 +78,13 @@ mod tests {
     use super::*;
 
     use crate::addresses;
-    use crate::testconfig;
-    use crate::utils;
+    use crate::setup;
 
     #[tokio::test]
     async fn check_balance_zero() {
         let random_addr = addresses::get_address("0x8BB0080aC1006D407dfe84D29013964aCC1b9C00");
 
-        let config = testconfig::TestConfig::load();
-        let (_provider, client) = utils::setup(
-            config
-                .anvil_endpoint
-                .expect("ANVIL_ENDPOINT does not exist")
-                .as_str(),
-            config.priv_key.as_str(),
-        )
-        .await
-        .expect("UTILS_SETUP failed");
+        let (_provider, client) = setup::test_setup().await;
 
         let balance_random = balance_of(
             &client,
@@ -111,16 +100,7 @@ mod tests {
     async fn check_balance_whale() {
         let whale_addr = addresses::get_address("0xD6c32E35D6A169C77786430ac7b257fF6bb480C3");
 
-        let config = testconfig::TestConfig::load();
-        let (_provider, client) = utils::setup(
-            config
-                .anvil_endpoint
-                .expect("ANVIL_ENDPOINT does not exist")
-                .as_str(),
-            config.priv_key.as_str(),
-        )
-        .await
-        .expect("UTILS_SETUP failed");
+        let (_provider, client) = setup::test_setup().await;
 
         let balance_whale = balance_of(
             &client,
@@ -137,16 +117,7 @@ mod tests {
         let whale_addr = addresses::get_address("0xD6c32E35D6A169C77786430ac7b257fF6bb480C3");
         let amount = U256::from(1e18 as u32);
 
-        let config = testconfig::TestConfig::load();
-        let (_provider, client) = utils::setup(
-            config
-                .anvil_endpoint
-                .expect("ANVIL_ENDPOINT does not exist")
-                .as_str(),
-            config.priv_key.as_str(),
-        )
-        .await
-        .expect("UTILS_SETUP failed");
+        let (_provider, client) = setup::test_setup().await;
 
         let receipt = approve(
             &client,
