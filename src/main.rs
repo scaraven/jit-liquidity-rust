@@ -5,8 +5,8 @@ use eyre::Result;
 #[path = "config.rs"]
 mod config;
 
-#[path = "uniswap/router.rs"]
-mod router;
+#[path = "uniswap/router02.rs"]
+mod router02;
 
 #[path = "interfaces/erc20.rs"]
 mod erc20;
@@ -38,8 +38,8 @@ async fn main() -> Result<()> {
     // Fetch pair address
     let pair = addresses::get_address(addresses::WETH_USDC_PAIR);
 
-    let token0_address = router::fetch_token0(&client, pair).await?;
-    let token1_address = router::fetch_token1(&client, pair).await?;
+    let token0_address = router02::fetch_token0(&client, pair).await?;
+    let token1_address = router02::fetch_token1(&client, pair).await?;
 
     println!("Token0 address: {:?}", token0_address);
     println!("Token1 address: {:?}", token1_address);
@@ -77,7 +77,7 @@ async fn main() -> Result<()> {
     let amount_in = U256::exp10(18);
     let amount_out_min = U256::zero();
 
-    let _receipt_three = router::swap_exact_ethfor_tokens(
+    let _receipt_three = router02::swap_exact_ethfor_tokens(
         &client,
         router_address,
         token0_address,
@@ -87,7 +87,7 @@ async fn main() -> Result<()> {
     )
     .await?;
 
-    let _receipt_four = router::swap_exact_ethfor_tokens(
+    let _receipt_four = router02::swap_exact_ethfor_tokens(
         &client,
         router_address,
         token1_address,

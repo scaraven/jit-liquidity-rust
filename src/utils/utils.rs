@@ -43,13 +43,13 @@ pub async fn buy_tokens_with_eth(
 ) -> Result<()> {
     use ethers::types::U256;
 
-    use crate::{addresses, erc20, router, utils::get_block_timestamp_future};
+    use crate::{addresses, erc20, router02, utils::get_block_timestamp_future};
 
     let router = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
     let deadline = get_block_timestamp_future(&provider, U256::from(600)).await;
 
     for (token, amount) in tokens.into_iter().zip(amounts) {
-        let _ = router::swap_eth_for_exact_tokens(
+        let _ = router02::swap_eth_for_exact_tokens(
             &client,
             router,
             token,

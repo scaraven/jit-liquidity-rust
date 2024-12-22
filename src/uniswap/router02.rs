@@ -331,6 +331,5 @@ mod tests {
         .await;
 
         assert!(receipt.is_ok(), "INCREASE_LIQUIDITY failed");
-        // Assert that we now have increased tokens
     }
 }
