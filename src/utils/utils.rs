@@ -39,27 +39,27 @@ pub async fn buy_tokens_with_eth(
     provider: &Provider<Http>,
     client: Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
     tokens: Vec<ethers::types::Address>,
+    amounts: Vec<ethers::types::U256>,
 ) -> Result<()> {
     use ethers::types::U256;
 
     use crate::{addresses, erc20, router, utils::get_block_timestamp_future};
 
-    let amount_eth = U256::exp10(18);
     let router = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
     let deadline = get_block_timestamp_future(&provider, U256::from(600)).await;
 
-    for token in tokens {
-        let _ = router::swap_exact_ethfor_tokens(
+    for (token, amount) in tokens.into_iter().zip(amounts) {
+        let _ = router::swap_eth_for_exact_tokens(
             &client,
             router,
             token,
-            amount_eth,
-            U256::zero(),
+            amount,
+            U256::exp10(18),
             deadline,
         )
         .await
         .expect("SWAP_EXACT_ETH_FOR_TOKENS failed");
-        let _ = erc20::approve(&client, token, router, U256::exp10(18))
+        let _ = erc20::approve(&client, token, router, U256::max_value())
             .await
             .expect("APPROVE failed");
     }

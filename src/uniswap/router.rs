@@ -19,6 +19,7 @@ abigen!(
     r"[
         swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)
         addLiquidity(address tokenA,address tokenB, uint amountADesired, uint amountBDesired, uint amountAMin, uint amountBMin, address to, uint deadline) external returns (uint amountA, uint amountB, uint liquidity)
+        swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)
         ]"
 );
 
@@ -90,6 +91,31 @@ pub async fn swap_exact_ethfor_tokens(
     }
 }
 
+pub async fn swap_eth_for_exact_tokens(
+    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
+    router: Address,
+    token_b: Address,
+    token_out: U256,
+    amount_eth: U256,
+    deadline: U256,
+) -> Result<TransactionReceipt> {
+    // Fetch contract
+    let contract = create_uniswap_v2_router(&client, router);
+
+    let path = vec![addresses::get_address(addresses::WETH), token_b];
+
+    let swap_call = contract
+        .swap_eth_for_exact_tokens(token_out, path, client.address(), deadline)
+        .value(amount_eth);
+
+    let pending_tx = swap_call.send().await.or_else(|e| Err(e));
+
+    match pending_tx {
+        Ok(tx) => Ok(tx.await?.unwrap_or(TransactionReceipt::default())),
+        Err(e) => Err(e.into()),
+    }
+}
+
 pub async fn increase_liquidity(
     client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
     router: Address,
@@ -150,7 +176,11 @@ mod tests {
     };
 
     use super::*;
-    use crate::{erc20::balance_of, setup, utils};
+    use crate::{erc20, setup, utils};
+
+    use std::sync::LazyLock;
+
+    static AMOUNT_DESIRED: LazyLock<ethers::types::U256> = LazyLock::new(|| U256::from(10000));
 
     #[tokio::test]
     async fn test_token_fetch() {
@@ -179,7 +209,7 @@ mod tests {
         let deadline = utils::get_block_timestamp_future(&provider, U256::from(600)).await;
 
         // Make sure we do not hold any USDC
-        let balance = balance_of(&client, token_b, client.address())
+        let balance = erc20::balance_of(&client, token_b, client.address())
             .await
             .unwrap();
 
@@ -196,7 +226,7 @@ mod tests {
 
         assert_eq!(receipt.status.unwrap().as_u64(), 1);
         assert!(
-            balance_of(&client, token_b, client.address())
+            erc20::balance_of(&client, token_b, client.address())
                 .await
                 .unwrap()
                 > balance + amount_out_min
@@ -242,25 +272,57 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_swap_eth_for_exact_tokens() {
+        let (provider, client) = setup::test_setup().await;
+
+        let router = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
+
+        let token_b = addresses::get_address(addresses::USDC_ADDR);
+        let deadline = utils::get_block_timestamp_future(&provider, U256::from(600)).await;
+        let desired = *AMOUNT_DESIRED;
+
+        let _ = erc20::approve(&client, token_b, router, U256::max_value())
+            .await
+            .unwrap();
+
+        let receipt =
+            swap_eth_for_exact_tokens(&client, router, token_b, desired, U256::exp10(18), deadline)
+                .await;
+
+        assert!(receipt.is_ok(), "SWAP_ETH_FOR_EXACT_TOKENS failed");
+        assert!(
+            erc20::balance_of(&client, token_b, client.address())
+                .await
+                .unwrap()
+                >= desired,
+            "TOKEN BALANCE is less than desired"
+        );
+    }
+
+    #[tokio::test]
     async fn test_increase_liquidity() {
         let (provider, client) = setup::test_setup().await;
 
         let router = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
         let usdc = addresses::get_address(addresses::USDC_ADDR);
         let wbtc = addresses::get_address(addresses::WBTC);
-        crate::utils::buy_tokens_with_eth(&provider, client.clone(), vec![usdc, wbtc])
-            .await
-            .unwrap();
+        crate::utils::buy_tokens_with_eth(
+            &provider,
+            client.clone(),
+            vec![usdc, wbtc],
+            vec![*AMOUNT_DESIRED, *AMOUNT_DESIRED],
+        )
+        .await
+        .unwrap();
         let deadline = utils::get_block_timestamp_future(&provider, U256::from(600)).await;
 
-        let amount_a_desired = U256::exp10(18);
         let receipt = increase_liquidity(
             &client,
             router,
             usdc,
             wbtc,
-            amount_a_desired,
-            amount_a_desired,
+            *AMOUNT_DESIRED,
+            *AMOUNT_DESIRED,
             U256::zero(),
             U256::zero(),
             client.address(),
@@ -268,7 +330,6 @@ mod tests {
         )
         .await;
 
-        println!("{:?}", receipt);
         assert!(receipt.is_ok(), "INCREASE_LIQUIDITY failed");
         // Assert that we now have increased tokens
     }
