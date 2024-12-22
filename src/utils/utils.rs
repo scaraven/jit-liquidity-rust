@@ -8,37 +8,39 @@ use ethers::{
 };
 use eyre::Result;
 
-use crate::config;
-
 #[path = "wallet.rs"]
 mod wallet;
 
-pub async fn setup(
-    config: config::Config,
-) -> Result<(
-    Provider<Http>,
-    Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-    AnvilInstance,
-)> {
-    let anvil_builder = match config.anvil_path {
+pub async fn setup_anvil(anvil_path: Option<&str>, rpc_url: Option<&str>) -> Result<AnvilInstance> {
+    let anvil_builder = match anvil_path {
         Some(path) => Anvil::at(path),
         None => Anvil::new(),
     };
 
     // Fork if necessary and then spawn
-    let anvil_builder = match config.rpc_url {
+    let anvil_builder = match rpc_url {
         Some(rpc_url) => anvil_builder.fork(rpc_url),
         None => anvil_builder,
     };
 
     let anvil = anvil_builder.spawn();
 
-    println!("Connecting to Ethereum node at: {}", anvil.endpoint());
+    Ok(anvil)
+}
 
-    let provider = wallet::create_provider(anvil.endpoint().as_str());
+pub async fn setup(
+    endpoint: &str,
+    priv_key: &str,
+) -> Result<(
+    Provider<Http>,
+    Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
+)> {
+    println!("Connecting to Ethereum node at: {}", endpoint);
+
+    let provider = wallet::create_provider(endpoint);
     let chain_id = provider.get_chainid().await?;
 
-    let client = wallet::create_signer(provider.clone(), &config.priv_key, chain_id.as_u64());
+    let client = wallet::create_signer(provider.clone(), priv_key, chain_id.as_u64());
 
-    Ok((provider, client, anvil))
+    Ok((provider, client))
 }

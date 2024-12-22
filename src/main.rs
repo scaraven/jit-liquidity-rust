@@ -1,5 +1,4 @@
-use ethers::providers::Middleware;
-use ethers::types::U256;
+use ethers::{providers::Middleware, types::U256};
 
 use eyre::Result;
 
@@ -21,11 +20,17 @@ mod utils;
 #[path = "utils/addresses.rs"]
 mod addresses;
 
+#[cfg(test)]
+#[path = "testconfig.rs"]
+mod testconfig;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let config = config::Config::load();
 
-    let (provider, client, _anvil) = utils::setup(config).await?;
+    let anvil = utils::setup_anvil(config.anvil_path.as_deref(), config.rpc_url.as_deref()).await?;
+    let (provider, client) =
+        utils::setup(anvil.endpoint().as_str(), config.priv_key.as_str()).await?;
 
     let eth_balance = provider.get_balance(client.address(), None).await?;
     println!("ETH balance: {:?}", eth_balance);
