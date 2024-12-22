@@ -8,7 +8,7 @@ impl TestConfig {
         dotenv::dotenv().ok();
         Self {
             anvil_endpoint: std::env::var("ANVIL_ENDPOINT").ok(),
-            priv_key: std::env::var("PRIVATE_KEY").expect("PRIVATE_KEY not set"),
+            priv_key: std::env::var("TEST_PRIVATE_KEY").expect("TEST_PRIVATE_KEY not set"),
         }
     }
 }
