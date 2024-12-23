@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Start anvil and run in the background
-anvil --fork-url https://mainnet.infura.io/v3/b826cf4e514847b792b840ff1e29fd11@21431100 > /dev/null 2>&1 &
+anvil --fork-url $1 > /dev/null 2>&1 &
 ANVIL_PID=$!
 
 echo "Anvil started with PID $ANVIL_PID"

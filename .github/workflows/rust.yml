@@ -8,7 +8,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  INFURA_URL: ${{ secrets.INFURA_URL }}
   PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
 
 jobs:
@@ -30,8 +29,9 @@ jobs:
       - name: Run tests
         run: |
           chmod +x ./run-tests.sh
-          ./run-tests.sh
+          ./run-tests.sh $INFURA_URL
         shell: bash
         env:
-          ANVIL_ENDPOINT: http://127.0.0.1:8545
-          TEST_PRIVATE_KEY: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+          ANVIL_ENDPOINT: ${{ vars.ANVIL_ENDPOINT }}
+          TEST_PRIVATE_KEY: ${{ vars.TEST_PRIVATE_KEY }}
+          INFURA_URL: ${{ secrets.INFURA_URL }}
