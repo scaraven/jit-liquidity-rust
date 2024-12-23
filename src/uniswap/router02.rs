@@ -14,6 +14,8 @@ use tokio::spawn;
 
 use crate::{addresses, utils};
 
+mod router02interface;
+
 abigen!(
     UniswapV2Router,
     r"[
@@ -76,7 +78,7 @@ pub async fn swap_exact_ethfor_tokens(
     deadline: U256,
 ) -> Result<TransactionReceipt> {
     // Fetch contract
-    let contract = create_uniswap_v2_router(&client, router);
+    let contract = create_uniswap_v2_router(client, router);
 
     let path = vec![addresses::get_address(addresses::WETH), token_b];
 
@@ -84,7 +86,7 @@ pub async fn swap_exact_ethfor_tokens(
         .swap_exact_eth_for_tokens(amount_out_min, path, client.address(), deadline)
         .value(amount_eth);
 
-    let pending_tx = swap_call.send().await.or_else(|e| Err(e));
+    let pending_tx = swap_call.send().await;
 
     match pending_tx {
         Ok(tx) => Ok(tx.await?.unwrap_or(TransactionReceipt::default())),
@@ -101,7 +103,7 @@ pub async fn swap_eth_for_exact_tokens(
     deadline: U256,
 ) -> Result<TransactionReceipt> {
     // Fetch contract
-    let contract = create_uniswap_v2_router(&client, router);
+    let contract = create_uniswap_v2_router(client, router);
 
     let path = vec![addresses::get_address(addresses::WETH), token_b];
 
@@ -109,7 +111,7 @@ pub async fn swap_eth_for_exact_tokens(
         .swap_eth_for_exact_tokens(token_out, path, client.address(), deadline)
         .value(amount_eth);
 
-    let pending_tx = swap_call.send().await.or_else(|e| Err(e));
+    let pending_tx = swap_call.send().await;
 
     match pending_tx {
         Ok(tx) => Ok(tx.await?.unwrap_or(TransactionReceipt::default())),
@@ -120,48 +122,44 @@ pub async fn swap_eth_for_exact_tokens(
 pub async fn increase_liquidity(
     client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
     router: Address,
-    token_a: Address,
-    token_b: Address,
-    amount_a_desired: U256,
-    amount_b_desired: U256,
-    amount_a_min: U256,
-    amount_b_min: U256,
-    to: Address,
+    args: router02interface::IncreaseLiquidityArgs,
     deadline: U256,
 ) -> Result<TransactionReceipt> {
-    let contract = create_uniswap_v2_router(&client, router);
+    let contract = create_uniswap_v2_router(client, router);
 
     let addr = client.address();
     let task_one = spawn({
         let client = client.clone();
         async move {
-            utils::check_approval_limit(&client, token_a, addr, router, amount_a_desired).await
+            utils::check_approval_limit(&client, args.token_a, addr, router, args.amount_a_desired)
+                .await
         }
     });
     let task_two = spawn({
         let client = client.clone();
         async move {
-            utils::check_approval_limit(&client, token_b, addr, router, amount_b_desired).await
+            utils::check_approval_limit(&client, args.token_b, addr, router, args.amount_b_desired)
+                .await
         }
     });
 
     let (approval_one, approval_two) = tokio::try_join!(task_one, task_two)?;
-    if (approval_one && approval_two) == false {
+    if !(approval_one && approval_two) {
         return Err(eyre::eyre!("APPROVAL_LIMIT not met"));
     }
 
     let add_liquidity_call = contract.add_liquidity(
-        token_a,
-        token_b,
-        amount_a_desired,
-        amount_b_desired,
-        amount_a_min,
-        amount_b_min,
-        to,
+        args.token_a,
+        args.token_b,
+        args.amount_a_desired,
+        args.amount_b_desired,
+        args.amount_a_min,
+        args.amount_b_min,
+        args.to,
         deadline,
     );
 
-    let pending_tx = add_liquidity_call.send().await.or_else(|e| Err(e));
+    let pending_tx: std::result::Result<_, _> = add_liquidity_call.send().await;
 
     match pending_tx {
         Ok(tx) => Ok(tx.await?.unwrap_or(TransactionReceipt::default())),
@@ -172,27 +170,22 @@ pub async fn increase_liquidity(
 pub async fn decrease_liquidity(
     client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
     router: Address,
-    token_a: Address,
-    token_b: Address,
-    liquidity: U256,
-    amount_a_min: U256,
-    amount_b_min: U256,
-    to: Address,
+    args: router02interface::DecreaseLiquidityArgs,
     deadline: U256,
 ) -> Result<TransactionReceipt> {
-    let contract = create_uniswap_v2_router(&client, router);
+    let contract = create_uniswap_v2_router(client, router);
 
     let add_liquidity_call = contract.decrease_liquidity(
-        token_a,
-        token_b,
-        liquidity,
-        amount_a_min,
-        amount_b_min,
-        to,
+        args.token_a,
+        args.token_b,
+        args.liquidity,
+        args.amount_a_min,
+        args.amount_b_min,
+        args.to,
         deadline,
     );
 
-    let pending_tx = add_liquidity_call.send().await.or_else(|e| Err(e));
+    let pending_tx = add_liquidity_call.send().await;
 
     match pending_tx {
         Ok(tx) => Ok(tx.await?.unwrap_or(TransactionReceipt::default())),
@@ -279,7 +272,7 @@ mod tests {
         let amount_out_min = U256::from(0);
         let mut deadline = utils::get_block_timestamp_future(&provider, U256::from(0)).await;
 
-        deadline = deadline - U256::from(10);
+        deadline -= U256::from(10);
 
         let receipt = swap_exact_ethfor_tokens(
             &client,
@@ -299,7 +292,7 @@ mod tests {
         if let Some(contract_error) = root.downcast_ref::<ContractError<SignerMiddleware<Provider<Http>, Wallet<ecdsa::SigningKey>>>>() {
             assert!(matches!(contract_error, ContractError::Revert(_)), "Expected a ContractError::Revert, but got a different error type.");
         } else {
-            assert!(false, "Expected a ContractError, but got a different error type.");
+            panic!("Expected a ContractError, but got a different error type.");
         }
     }
 
@@ -356,9 +349,7 @@ mod tests {
             U256::zero()
         );
 
-        let receipt = increase_liquidity(
-            &client,
-            router,
+        let args = router02interface::IncreaseLiquidityArgs::new(
             usdc,
             wbtc,
             *AMOUNT_DESIRED,
@@ -366,9 +357,10 @@ mod tests {
             U256::zero(),
             U256::zero(),
             client.address(),
-            deadline,
-        )
-        .await;
+        );
+
+        // Deposit liquidity
+        let receipt = increase_liquidity(&client, router, args, deadline).await;
 
         assert!(receipt.is_ok(), "INCREASE_LIQUIDITY failed");
         assert!(
@@ -397,10 +389,7 @@ mod tests {
         .unwrap();
         let deadline = utils::get_block_timestamp_future(&provider, U256::from(600)).await;
 
-        // Deposit liquidity
-        let receipt = increase_liquidity(
-            &client,
-            router,
+        let args = router02interface::IncreaseLiquidityArgs::new(
             usdc,
             wbtc,
             *AMOUNT_DESIRED,
@@ -408,11 +397,10 @@ mod tests {
             U256::zero(),
             U256::zero(),
             client.address(),
-            deadline,
-        )
-        .await;
+        );
 
-        println!("{:#?}", receipt);
+        // Deposit liquidity
+        let receipt = increase_liquidity(&client, router, args, deadline).await;
 
         // Get amount of tokenA and tokenB used to deposit liquidity
 
@@ -429,18 +417,16 @@ mod tests {
             .await
             .unwrap();
 
-        let receipt = decrease_liquidity(
-            &client,
-            router,
+        let args = router02interface::DecreaseLiquidityArgs::new(
             usdc,
             wbtc,
             liquidity,
             U256::from(1),
             U256::from(1),
             client.address(),
-            deadline,
-        )
-        .await;
+        );
+
+        let receipt = decrease_liquidity(&client, router, args, deadline).await;
 
         println!("{:#?}", receipt);
         assert!(receipt.is_ok(), "DECREASE_LIQUIDITY failed");

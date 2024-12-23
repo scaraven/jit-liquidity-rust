@@ -105,5 +105,6 @@ pub async fn test_setup() -> (
         .unwrap()
         .ok_or_else(|| eyre::format_err!("ETH TRANSFER FAILED"))
         .unwrap();
-    return (provider, client);
+
+    (provider, client)
 }

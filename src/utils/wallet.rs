@@ -5,11 +5,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 pub fn setup_wallet(private_key: &str, chain_id: u64) -> LocalWallet {
-    let wallet = private_key
+    private_key
         .parse::<LocalWallet>()
         .expect("Cannot parse private key")
-        .with_chain_id(chain_id);
-    wallet
+        .with_chain_id(chain_id)
 }
 
 pub fn create_signer<C: JsonRpcClient>(
@@ -20,8 +19,7 @@ pub fn create_signer<C: JsonRpcClient>(
 }
 
 pub fn create_provider(rpc_url: &str) -> Provider<Http> {
-    let provider = Provider::try_from(rpc_url)
+    Provider::try_from(rpc_url)
         .expect("Failed to connect to Ethereum node")
-        .interval(Duration::from_millis(10u64));
-    provider
+        .interval(Duration::from_millis(10u64))
 }

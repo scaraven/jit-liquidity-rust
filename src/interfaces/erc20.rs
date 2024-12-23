@@ -57,7 +57,7 @@ pub async fn balance_of(
 
     let balance = contract.balance_of(spender).call().await?;
 
-    Ok(U256::from(balance))
+    Ok(balance)
 }
 
 pub async fn allowance(
@@ -70,7 +70,7 @@ pub async fn allowance(
 
     let allowance = contract.allowance(owner, spender).call().await?;
 
-    Ok(U256::from(allowance))
+    Ok(allowance)
 }
 
 #[cfg(test)]
@@ -129,7 +129,7 @@ mod tests {
         .expect("APPROVE failed");
 
         // Fetch approval
-        assert_eq!(receipt.status.expect("APPROVE reverted"), (1 as u64).into());
+        assert_eq!(receipt.status.expect("APPROVE reverted"), (1_u64).into());
 
         // Ensure that allowance is now 1e18
         let allowance = allowance(

@@ -46,7 +46,7 @@ pub async fn buy_tokens_with_eth(
     use crate::{addresses, erc20, router02, utils::get_block_timestamp_future};
 
     let router = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
-    let deadline = get_block_timestamp_future(&provider, U256::from(600)).await;
+    let deadline = get_block_timestamp_future(provider, U256::from(600)).await;
 
     for (token, amount) in tokens.into_iter().zip(amounts) {
         let _ = router02::swap_eth_for_exact_tokens(
@@ -75,16 +75,17 @@ mod tests {
 
     #[tokio::test]
     async fn check_timestamp() {
+        const DELAY: u64 = 10;
         let (provider, _) = setup::test_setup().await;
 
         let timestamp = get_block_timestamp_future(&provider, U256::zero())
             .await
             .as_u64();
         assert_eq!(
-            get_block_timestamp_future(&provider, U256::from(10))
+            get_block_timestamp_future(&provider, U256::from(DELAY))
                 .await
                 .as_u64(),
-            timestamp + 10
+            timestamp + DELAY
         );
     }
 }
