@@ -22,7 +22,7 @@ abigen!(
         swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)
         addLiquidity(address tokenA,address tokenB, uint amountADesired, uint amountBDesired, uint amountAMin, uint amountBMin, address to, uint deadline) external returns (uint amountA, uint amountB, uint liquidity)
         swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)
-        decreaseLiquidity(address tokenA, address tokenB, uint liquidity, uint amountAMin, uint amountBMin, address to, uint deadline) external returns (uint amountA, uint amountB)
+        removeLiquidity(address tokenA, address tokenB, uint liquidity, uint amountAMin, uint amountBMin, address to, uint deadline) external returns (uint amountA, uint amountB)
         ]"
 );
 
@@ -167,7 +167,7 @@ pub async fn increase_liquidity(
     }
 }
 
-pub async fn decrease_liquidity(
+pub async fn remove_liquidity(
     client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
     router: Address,
     args: router02interface::DecreaseLiquidityArgs,
@@ -175,7 +175,7 @@ pub async fn decrease_liquidity(
 ) -> Result<TransactionReceipt> {
     let contract = create_uniswap_v2_router(client, router);
 
-    let add_liquidity_call = contract.decrease_liquidity(
+    let add_liquidity_call = contract.remove_liquidity(
         args.token_a,
         args.token_b,
         args.liquidity,
@@ -205,7 +205,7 @@ mod tests {
 
     use std::sync::LazyLock;
 
-    static AMOUNT_DESIRED: LazyLock<ethers::types::U256> = LazyLock::new(|| U256::from(10000));
+    static AMOUNT_DESIRED: LazyLock<ethers::types::U256> = LazyLock::new(|| U256::from(100000));
 
     #[tokio::test]
     async fn test_token_fetch() {
@@ -373,7 +373,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_decrease_liquidity() {
+    async fn test_remove_liquidity() {
         let (provider, client) = setup::test_setup().await;
 
         let router = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
@@ -402,6 +402,8 @@ mod tests {
         // Deposit liquidity
         let receipt = increase_liquidity(&client, router, args, deadline).await;
 
+        println!("{:#?}", receipt);
+
         // Get amount of tokenA and tokenB used to deposit liquidity
 
         assert!(receipt.is_ok(), "INCREASE_LIQUIDITY failed");
@@ -411,9 +413,10 @@ mod tests {
             .await
             .unwrap();
 
-        println!("{:#?}", liquidity);
+        assert!(liquidity > U256::zero(), "LIQUIDITY BALANCE is zero");
+
         // Approve liquidity
-        let _ = erc20::approve(&client, pair, router, U256::max_value())
+        let _ = erc20::approve(&client, pair, router, liquidity)
             .await
             .unwrap();
 
@@ -426,9 +429,9 @@ mod tests {
             client.address(),
         );
 
-        let receipt = decrease_liquidity(&client, router, args, deadline).await;
+        let receipt = remove_liquidity(&client, router, args, deadline).await;
 
-        println!("{:#?}", receipt);
+        println!("{:?}", receipt);
         assert!(receipt.is_ok(), "DECREASE_LIQUIDITY failed");
     }
 }
