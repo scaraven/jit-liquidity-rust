@@ -6,9 +6,9 @@ use ethers::{
     signers::LocalWallet,
     types::{Address, U256},
 };
+use eyre::Result;
 
 use crate::erc20;
-use eyre::Result;
 
 // Get block timestamp
 pub async fn get_block_timestamp_future<C: JsonRpcClient>(
@@ -70,22 +70,12 @@ pub async fn buy_tokens_with_eth(
 #[cfg(test)]
 mod tests {
     use crate::setup;
-    use crate::testconfig;
 
     use super::*;
 
     #[tokio::test]
     async fn check_timestamp() {
-        let config = testconfig::TestConfig::load();
-        let (provider, _client) = setup::setup(
-            config
-                .anvil_endpoint
-                .expect("ANVIL_ENDPOINT does not exist")
-                .as_str(),
-            config.priv_key.as_str(),
-        )
-        .await
-        .expect("UTILS_SETUP failed");
+        let (provider, _) = setup::test_setup().await;
 
         let timestamp = get_block_timestamp_future(&provider, U256::zero())
             .await

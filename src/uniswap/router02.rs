@@ -20,6 +20,7 @@ abigen!(
         swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)
         addLiquidity(address tokenA,address tokenB, uint amountADesired, uint amountBDesired, uint amountAMin, uint amountBMin, address to, uint deadline) external returns (uint amountA, uint amountB, uint liquidity)
         swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)
+        decreaseLiquidity(address tokenA, address tokenB, uint liquidity, uint amountAMin, uint amountBMin, address to, uint deadline) external returns (uint amountA, uint amountB)
         ]"
 );
 
@@ -154,6 +155,37 @@ pub async fn increase_liquidity(
         token_b,
         amount_a_desired,
         amount_b_desired,
+        amount_a_min,
+        amount_b_min,
+        to,
+        deadline,
+    );
+
+    let pending_tx = add_liquidity_call.send().await.or_else(|e| Err(e));
+
+    match pending_tx {
+        Ok(tx) => Ok(tx.await?.unwrap_or(TransactionReceipt::default())),
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub async fn decrease_liquidity(
+    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
+    router: Address,
+    token_a: Address,
+    token_b: Address,
+    liquidity: U256,
+    amount_a_min: U256,
+    amount_b_min: U256,
+    to: Address,
+    deadline: U256,
+) -> Result<TransactionReceipt> {
+    let contract = create_uniswap_v2_router(&client, router);
+
+    let add_liquidity_call = contract.decrease_liquidity(
+        token_a,
+        token_b,
+        liquidity,
         amount_a_min,
         amount_b_min,
         to,
@@ -306,6 +338,7 @@ mod tests {
         let router = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
         let usdc = addresses::get_address(addresses::USDC_ADDR);
         let wbtc = addresses::get_address(addresses::WBTC);
+        let pair = addresses::get_address(addresses::USDC_WBTC_PAIR);
         crate::utils::buy_tokens_with_eth(
             &provider,
             client.clone(),
@@ -315,6 +348,13 @@ mod tests {
         .await
         .unwrap();
         let deadline = utils::get_block_timestamp_future(&provider, U256::from(600)).await;
+
+        assert_eq!(
+            erc20::balance_of(&client, pair, client.address())
+                .await
+                .unwrap(),
+            U256::zero()
+        );
 
         let receipt = increase_liquidity(
             &client,
@@ -331,5 +371,78 @@ mod tests {
         .await;
 
         assert!(receipt.is_ok(), "INCREASE_LIQUIDITY failed");
+        assert!(
+            erc20::balance_of(&client, pair, client.address())
+                .await
+                .unwrap()
+                > U256::zero(),
+            "LIQUIDITY BALANCE is zero"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_decrease_liquidity() {
+        let (provider, client) = setup::test_setup().await;
+
+        let router = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
+        let usdc = addresses::get_address(addresses::USDC_ADDR);
+        let wbtc = addresses::get_address(addresses::WBTC);
+        crate::utils::buy_tokens_with_eth(
+            &provider,
+            client.clone(),
+            vec![usdc, wbtc],
+            vec![*AMOUNT_DESIRED, *AMOUNT_DESIRED],
+        )
+        .await
+        .unwrap();
+        let deadline = utils::get_block_timestamp_future(&provider, U256::from(600)).await;
+
+        // Deposit liquidity
+        let receipt = increase_liquidity(
+            &client,
+            router,
+            usdc,
+            wbtc,
+            *AMOUNT_DESIRED,
+            *AMOUNT_DESIRED,
+            U256::zero(),
+            U256::zero(),
+            client.address(),
+            deadline,
+        )
+        .await;
+
+        println!("{:#?}", receipt);
+
+        // Get amount of tokenA and tokenB used to deposit liquidity
+
+        assert!(receipt.is_ok(), "INCREASE_LIQUIDITY failed");
+
+        let pair = addresses::get_address(addresses::USDC_WBTC_PAIR);
+        let liquidity = erc20::balance_of(&client, pair, client.address())
+            .await
+            .unwrap();
+
+        println!("{:#?}", liquidity);
+        // Approve liquidity
+        let _ = erc20::approve(&client, pair, router, U256::max_value())
+            .await
+            .unwrap();
+
+        let receipt = decrease_liquidity(
+            &client,
+            router,
+            usdc,
+            wbtc,
+            liquidity,
+            U256::from(1),
+            U256::from(1),
+            client.address(),
+            deadline,
+        )
+        .await;
+
+        println!("{:#?}", receipt);
+        assert!(receipt.is_ok(), "DECREASE_LIQUIDITY failed");
     }
 }

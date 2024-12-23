@@ -4,7 +4,7 @@ use ethers::signers::{LocalWallet, Signer};
 use std::sync::Arc;
 use std::time::Duration;
 
-fn setup_wallet(private_key: &str, chain_id: u64) -> LocalWallet {
+pub fn setup_wallet(private_key: &str, chain_id: u64) -> LocalWallet {
     let wallet = private_key
         .parse::<LocalWallet>()
         .expect("Cannot parse private key")
@@ -14,10 +14,8 @@ fn setup_wallet(private_key: &str, chain_id: u64) -> LocalWallet {
 
 pub fn create_signer<C: JsonRpcClient>(
     provider: Provider<C>,
-    private_key: &str,
-    chain_id: u64,
+    wallet: LocalWallet,
 ) -> Arc<SignerMiddleware<Provider<C>, LocalWallet>> {
-    let wallet = setup_wallet(private_key, chain_id);
     Arc::new(SignerMiddleware::new(provider, wallet))
 }
 
