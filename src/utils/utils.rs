@@ -2,45 +2,90 @@ use std::sync::Arc;
 
 use ethers::{
     middleware::SignerMiddleware,
-    providers::{Http, Middleware, Provider},
+    providers::{Http, JsonRpcClient, Middleware, Provider},
     signers::LocalWallet,
-    utils::{Anvil, AnvilInstance},
+    types::{Address, U256},
 };
 use eyre::Result;
 
-#[path = "wallet.rs"]
-mod wallet;
+use crate::erc20;
 
-pub async fn setup_anvil(anvil_path: Option<&str>, rpc_url: Option<&str>) -> Result<AnvilInstance> {
-    let anvil_builder = match anvil_path {
-        Some(path) => Anvil::at(path),
-        None => Anvil::new(),
-    };
+// Get block timestamp
+pub async fn get_block_timestamp_future<C: JsonRpcClient>(
+    provider: &Provider<C>,
+    seconds: U256,
+) -> U256 {
+    let block_number = provider.get_block_number().await.unwrap();
+    let block = provider.get_block(block_number).await.unwrap().unwrap();
 
-    // Fork if necessary and then spawn
-    let anvil_builder = match rpc_url {
-        Some(rpc_url) => anvil_builder.fork(rpc_url),
-        None => anvil_builder,
-    };
-
-    let anvil = anvil_builder.spawn();
-
-    Ok(anvil)
+    block.timestamp + seconds
 }
 
-pub async fn setup(
-    endpoint: &str,
-    priv_key: &str,
-) -> Result<(
-    Provider<Http>,
-    Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-)> {
-    println!("Connecting to Ethereum node at: {}", endpoint);
+// Check that approval is over a limit
+pub async fn check_approval_limit(
+    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
+    token: Address,
+    owner: Address,
+    spender: Address,
+    desired: U256,
+) -> bool {
+    let allowance = erc20::allowance(client, token, owner, spender)
+        .await
+        .expect("ALLOWANCE failed");
+    allowance >= desired
+}
 
-    let provider = wallet::create_provider(endpoint);
-    let chain_id = provider.get_chainid().await?;
+pub async fn buy_tokens_with_eth(
+    provider: &Provider<Http>,
+    client: Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
+    tokens: Vec<ethers::types::Address>,
+    amounts: Vec<ethers::types::U256>,
+) -> Result<()> {
+    use ethers::types::U256;
 
-    let client = wallet::create_signer(provider.clone(), priv_key, chain_id.as_u64());
+    use crate::{addresses, erc20, router02, utils::get_block_timestamp_future};
 
-    Ok((provider, client))
+    let router = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
+    let deadline = get_block_timestamp_future(provider, U256::from(600)).await;
+
+    for (token, amount) in tokens.into_iter().zip(amounts) {
+        let _ = router02::swap_eth_for_exact_tokens(
+            &client,
+            router,
+            token,
+            amount,
+            U256::exp10(18),
+            deadline,
+        )
+        .await
+        .expect("SWAP_EXACT_ETH_FOR_TOKENS failed");
+        let _ = erc20::approve(&client, token, router, U256::max_value())
+            .await
+            .expect("APPROVE failed");
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::setup;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn check_timestamp() {
+        const DELAY: u64 = 10;
+        let (provider, _) = setup::test_setup().await;
+
+        let timestamp = get_block_timestamp_future(&provider, U256::zero())
+            .await
+            .as_u64();
+        assert_eq!(
+            get_block_timestamp_future(&provider, U256::from(DELAY))
+                .await
+                .as_u64(),
+            timestamp + DELAY
+        );
+    }
 }
