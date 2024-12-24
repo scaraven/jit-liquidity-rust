@@ -3,19 +3,16 @@ pragma solidity ^0.8.17;
 
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
-import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract UniswapV3Helper is Ownable, IUniswapV3Helper {
     ISwapRouter public immutable swapRouter;
     INonfungiblePositionManager public immutable positionManager;
-    IUniswapV3Factory public immutable factory;
 
-    constructor(address _swapRouter, address _positionManager, address _factory) {
+    constructor(address _swapRouter, address _positionManager) {
         swapRouter = ISwapRouter(_swapRouter);
         positionManager = INonfungiblePositionManager(_positionManager);
-        factory = IUniswapV3Factory(_factory);
     }
 
     // Approve tokens for use in swaps and liquidity
