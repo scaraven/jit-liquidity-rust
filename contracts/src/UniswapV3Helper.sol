@@ -6,11 +6,13 @@ import "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.s
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract UniswapV3Helper is Ownable, IUniswapV3Helper {
+import {UniswapV3HelperInterface} from "./UniswapV3HelperInterface.sol";
+
+contract UniswapV3Helper is Ownable, UniswapV3HelperInterface {
     ISwapRouter public immutable swapRouter;
     INonfungiblePositionManager public immutable positionManager;
 
-    constructor(address _swapRouter, address _positionManager) {
+    constructor(address _swapRouter, address _positionManager) Ownable(msg.sender) {
         swapRouter = ISwapRouter(_swapRouter);
         positionManager = INonfungiblePositionManager(_positionManager);
     }

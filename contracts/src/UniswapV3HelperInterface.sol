@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-interface UniswapV3Helper {
+interface UniswapV3HelperInterface {
     function approveToken(address token, uint256 amount) external;
     function increaseLiquidity(
         address token0,

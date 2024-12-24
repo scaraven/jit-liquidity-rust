@@ -27,6 +27,25 @@ repos:
         language: system
         files: ^contracts/.*\.sol$
 
+      - id: forge-fmt
+        name: Forge fmt
+        description: Run forge fmt on files included in the commit. forge should be installed before-hand.
+        entry: bash -c 'cd contracts && forge build --sizes'
+        pass_filenames: false
+        types: [file]
+        language: system
+        files: ^contracts/.*\.sol$
+
+      - id: forge-fmt
+        name: Forge fmt
+        description: Run forge fmt on files included in the commit. forge should be installed before-hand.
+        entry: bash -c 'cd contracts && forge test -vvv'
+        pass_filenames: false
+        types: [file]
+        language: system
+        files: ^contracts/.*\.sol$
+
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
     hooks:
