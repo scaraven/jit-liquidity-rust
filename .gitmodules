@@ -6,3 +6,8 @@
 [submodule "contracts/lib/openzeppelin-contracts"]
 	path = contracts/lib/openzeppelin-contracts
 	url = https://github.com/openzeppelin/openzeppelin-contracts
+[submodule "contracts/lib/v3-core"]
+	path = contracts/lib/v3-core
+	url = https://github.com/uniswap/v3-core
+[submodule "lib/v3-core"]
+	branch = 0.8
