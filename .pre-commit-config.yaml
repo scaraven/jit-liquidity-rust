@@ -3,7 +3,10 @@ repos:
     rev: v1.0
     hooks:
       - id: fmt
+        types: [file, rust]
       - id: cargo-check
+        types: [file, rust]
+
 
   - repo: local
     hooks:
