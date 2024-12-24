@@ -15,6 +15,9 @@ jobs:
   check:
     strategy:
       fail-fast: true
+    defaults:
+      run:
+        working-directory: contracts
 
     name: Foundry project
     runs-on: ubuntu-latest
@@ -28,6 +31,7 @@ jobs:
 
       - name: Show Forge version
         run: |
+          cd contracts
           forge --version
 
       - name: Run Forge fmt

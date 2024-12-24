@@ -18,7 +18,7 @@ contract UniswapV3Helper is Ownable, UniswapV3HelperInterface {
     }
 
     // Approve tokens for use in swaps and liquidity
-    function approveToken(address token, uint256 amount) external onlyOwner {
+    function approveToken(address token, uint256 amount) external override onlyOwner {
         IERC20(token).approve(address(swapRouter), amount);
         IERC20(token).approve(address(positionManager), amount);
     }
@@ -31,8 +31,14 @@ contract UniswapV3Helper is Ownable, UniswapV3HelperInterface {
         uint256 amount0,
         uint256 amount1,
         int24 tickLower,
-        int24 tickUpper
-    ) external onlyOwner returns (uint256 tokenId, uint128 liquidity, uint256 amount0Used, uint256 amount1Used) {
+        int24 tickUpper,
+        uint256 deadline
+    )
+        external
+        override
+        onlyOwner
+        returns (uint256 tokenId, uint128 liquidity, uint256 amount0Min, uint256 amount1Min)
+    {
         IERC20(token0).transferFrom(msg.sender, address(this), amount0);
         IERC20(token1).transferFrom(msg.sender, address(this), amount1);
 
@@ -44,21 +50,24 @@ contract UniswapV3Helper is Ownable, UniswapV3HelperInterface {
             tickUpper: tickUpper,
             amount0Desired: amount0,
             amount1Desired: amount1,
-            amount0Min: 0,
-            amount1Min: 0,
+            amount0Min: amount0Min,
+            amount1Min: amount1Min,
             recipient: msg.sender,
-            deadline: block.timestamp
+            deadline: deadline
         });
 
-        return positionManager.mint(params);
+        (tokenId, liquidity, amount0, amount1) = positionManager.mint(params);
     }
 
     // Perform a token swap
-    function performSwap(address tokenIn, address tokenOut, uint24 fee, uint256 amountIn, uint256 amountOutMin)
-        external
-        onlyOwner
-        returns (uint256 amountOut)
-    {
+    function performSwap(
+        address tokenIn,
+        address tokenOut,
+        uint24 fee,
+        uint256 amountIn,
+        uint256 amountOutMin,
+        uint256 deadline
+    ) external override onlyOwner returns (uint256 amountOut) {
         IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn);
 
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
@@ -66,7 +75,7 @@ contract UniswapV3Helper is Ownable, UniswapV3HelperInterface {
             tokenOut: tokenOut,
             fee: fee,
             recipient: msg.sender,
-            deadline: block.timestamp,
+            deadline: deadline,
             amountIn: amountIn,
             amountOutMinimum: amountOutMin,
             sqrtPriceLimitX96: 0
@@ -76,25 +85,27 @@ contract UniswapV3Helper is Ownable, UniswapV3HelperInterface {
     }
 
     // Remove liquidity from a Uniswap V3 pool
-    function decreaseLiquidity(uint256 tokenId, uint128 liquidity)
-        external
-        onlyOwner
-        returns (uint256 amount0, uint256 amount1)
-    {
+    function decreaseLiquidity(
+        uint256 tokenId,
+        uint128 liquidity,
+        uint256 amount0Min,
+        uint256 amount1Min,
+        uint256 deadline
+    ) external override onlyOwner returns (uint256 amount0, uint256 amount1) {
         INonfungiblePositionManager.DecreaseLiquidityParams memory params = INonfungiblePositionManager
             .DecreaseLiquidityParams({
             tokenId: tokenId,
             liquidity: liquidity,
-            amount0Min: 0,
-            amount1Min: 0,
-            deadline: block.timestamp
+            amount0Min: amount0Min,
+            amount1Min: amount1Min,
+            deadline: deadline
         });
 
         return positionManager.decreaseLiquidity(params);
     }
 
     // Collect fees from a Uniswap V3 position
-    function collectFees(uint256 tokenId) external onlyOwner returns (uint256 amount0, uint256 amount1) {
+    function collectFees(uint256 tokenId) external override onlyOwner returns (uint256 amount0, uint256 amount1) {
         INonfungiblePositionManager.CollectParams memory params = INonfungiblePositionManager.CollectParams({
             tokenId: tokenId,
             recipient: msg.sender,
@@ -102,6 +113,7 @@ contract UniswapV3Helper is Ownable, UniswapV3HelperInterface {
             amount1Max: type(uint128).max
         });
 
+        // Transfer fees to owner
         return positionManager.collect(params);
     }
 }
