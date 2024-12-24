@@ -1,0 +1,2 @@
+forge-std/=lib/forge-std/src/
+@uniswap/v3-periphery/=lib/v3-periphery/
