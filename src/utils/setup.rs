@@ -1,110 +1,79 @@
-use std::sync::Arc;
-
-use ethers::{
-    middleware::SignerMiddleware,
-    providers::{Http, Middleware, Provider},
-    signers::LocalWallet,
-    utils::{Anvil, AnvilInstance},
+use alloy::{
+    network::EthereumWallet,
+    primitives::Address,
+    providers::{Provider, ProviderBuilder},
+    signers::local::PrivateKeySigner,
+    transports::{
+        http::{
+            reqwest::{self, Url},
+            Http,
+        },
+        BoxTransport,
+    },
 };
-use eyre::Result;
 
-#[path = "wallet.rs"]
-mod wallet;
+pub async fn setup_provider_with_anvil(rpc_url: Option<Url>) -> impl Provider<BoxTransport> {
+    let builder = ProviderBuilder::default().with_recommended_fillers();
 
-pub async fn setup_anvil(anvil_path: Option<&str>, rpc_url: Option<&str>) -> Result<AnvilInstance> {
-    let anvil_builder = match anvil_path {
-        Some(path) => Anvil::at(path),
-        None => Anvil::new(),
-    };
-
-    // Fork if necessary and then spawn
-    let anvil_builder = match rpc_url {
-        Some(rpc_url) => anvil_builder.fork(rpc_url),
-        None => anvil_builder,
-    };
-
-    let anvil = anvil_builder.spawn();
-
-    Ok(anvil)
+    match rpc_url {
+        Some(url) => builder.on_anvil_with_wallet_and_config(|anvil| anvil.fork(url)),
+        None => builder.on_anvil_with_wallet(),
+    }
 }
 
-pub async fn setup(
-    endpoint: &str,
-    priv_key: &str,
-) -> Result<(
-    Provider<Http>,
-    Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-)> {
+pub async fn setup_provider(
+    endpoint: Url,
+    priv_key: PrivateKeySigner,
+) -> impl Provider<Http<reqwest::Client>> {
     println!("Connecting to Ethereum node at: {}", endpoint);
 
-    let provider = wallet::create_provider(endpoint);
-    let chain_id = provider.get_chainid().await?;
-    let wallet = wallet::setup_wallet(priv_key, chain_id.as_u64());
-
-    let client = wallet::create_signer(provider.clone(), wallet);
-
-    Ok((provider, client))
+    let wallet = EthereumWallet::from(priv_key);
+    ProviderBuilder::default().wallet(wallet).on_http(endpoint)
 }
 
+// Given a spun up Anvil instance, return a provider
 #[cfg(test)]
-pub async fn setup_with_wallet(
-    endpoint: &str,
-    wallet: LocalWallet,
-) -> Result<(
-    Provider<Http>,
-    Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-)> {
-    println!("Connecting to Ethereum node at: {}", endpoint);
-
-    let provider = wallet::create_provider(endpoint);
-
-    let client = wallet::create_signer(provider.clone(), wallet);
-
-    Ok((provider, client))
-}
-
-#[cfg(test)]
-pub async fn test_setup() -> (
-    Provider<Http>,
-    Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-) {
-    use ethers::{
-        core::rand::thread_rng,
-        types::{TransactionRequest, U256},
+pub async fn test_setup() -> (impl Provider<Http<reqwest::Client>>, Address) {
+    use alloy::{
+        network::{EthereumWallet, TransactionBuilder},
+        primitives::U256,
+        providers::ProviderBuilder,
+        rpc::types::TransactionRequest,
+        signers::local::PrivateKeySigner,
+        transports::http::reqwest::Url,
     };
 
     const HUNDRED_ETH_DECIMALS: usize = 20;
 
     let config = crate::testconfig::TestConfig::load();
-    let wallet = LocalWallet::new(&mut thread_rng());
-    let funded_wallet = config.priv_key.parse::<LocalWallet>().unwrap();
+    let signer = PrivateKeySigner::random();
+    let address = signer.address();
+    let wallet = EthereumWallet::new(signer);
+    let funded_wallet = EthereumWallet::from(config.priv_key);
 
-    let (provider, client) = setup_with_wallet(
-        config
-            .anvil_endpoint
-            .expect("ANVIL_ENDPOINT does not exist")
-            .as_str(),
-        wallet,
-    )
-    .await
-    .expect("UTILS_SETUP failed");
+    let provider = ProviderBuilder::new()
+        .with_recommended_fillers()
+        .wallet(wallet)
+        .on_http(Url::parse(&config.anvil_endpoint).unwrap());
 
-    let funded_client = SignerMiddleware::new(provider.clone(), funded_wallet);
+    let funded_provider = ProviderBuilder::new()
+        .with_recommended_fillers()
+        .wallet(funded_wallet)
+        .on_http(Url::parse(&config.anvil_endpoint).unwrap());
 
     // Fund our client using our existing funded_wallet
-    let tx = TransactionRequest::new()
-        .to(client.address())
-        .value(U256::exp10(HUNDRED_ETH_DECIMALS));
+    let tx: TransactionRequest = TransactionRequest::default()
+        .with_to(address)
+        .with_value(U256::pow(U256::from(10), U256::from(HUNDRED_ETH_DECIMALS)));
 
-    // send it!
-    let pending_tx = funded_client.send_transaction(tx, None).await.unwrap();
-
-    // get the mined tx
-    let _ = pending_tx
+    // Send it!
+    let _ = funded_provider
+        .send_transaction(tx)
         .await
         .unwrap()
-        .ok_or_else(|| eyre::format_err!("ETH TRANSFER FAILED"))
+        .get_receipt()
+        .await
         .unwrap();
 
-    (provider, client)
+    (provider, address)
 }

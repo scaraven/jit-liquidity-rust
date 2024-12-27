@@ -1,154 +1,176 @@
-use std::sync::Arc;
-
-use ethers::{
-    contract::abigen,
-    core::types::{Address, U256},
-    middleware::SignerMiddleware,
-    providers::{Http, Provider},
-    signers::LocalWallet,
-    types::TransactionReceipt,
+use alloy::{
+    primitives::{Address, FixedBytes, U256},
+    providers::Provider,
+    sol,
+    transports::http::{reqwest, Http},
 };
-
 use eyre::Result;
-use tokio::spawn;
+use IUniswapV2Router::IUniswapV2RouterInstance;
 
-use crate::{addresses, utils};
+use crate::{addresses, erc20, utils};
 
 mod router02interface;
 
-abigen!(
-    UniswapV2Router,
-    r"[
-        swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)
-        addLiquidity(address tokenA,address tokenB, uint amountADesired, uint amountBDesired, uint amountAMin, uint amountBMin, address to, uint deadline) external returns (uint amountA, uint amountB, uint liquidity)
-        swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)
-        removeLiquidity(address tokenA, address tokenB, uint liquidity, uint amountAMin, uint amountBMin, address to, uint deadline) external returns (uint amountA, uint amountB)
-        ]"
+const DELAY: u64 = 600;
+const MIN_ETH_DECIMALS: u64 = 18;
+const BASE: u64 = 10;
+
+sol!(
+    #[sol(rpc)]
+    "contracts/src/IUniswapV2Router.sol"
 );
 
-abigen!(
-    UniswapV2Pair,
-    r#"[
-        approve(address,uint256)(bool)
-        getReserves()(uint112,uint112,uint32)
-        token0()(address)
-        token1()(address)
-    ]"#
+sol!(
+    #[sol(rpc)]
+    "contracts/src/IUniswapV2Pair.sol"
 );
 
-fn create_uniswap_v2_router(
-    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
+fn create_uniswap_v2_router<P: Provider<Http<reqwest::Client>>>(
+    provider: P,
     router: Address,
-) -> UniswapV2Router<SignerMiddleware<Provider<Http>, LocalWallet>> {
-    UniswapV2Router::new(router, client.clone())
+) -> IUniswapV2RouterInstance<Http<reqwest::Client>, P> {
+    IUniswapV2Router::new(router, provider)
 }
 
-pub async fn fetch_token0(
-    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
+pub async fn buy_tokens_with_eth<P: Provider<Http<reqwest::Client>>>(
+    provider: &P,
+    tokens: Vec<Address>,
+    amounts: Vec<U256>,
+    to: Address,
+) -> Result<()> {
+    let router = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
+    let deadline = utils::get_block_timestamp_future(provider, DELAY)
+        .await
+        .expect("GET_BLOCK_TIMESTAMP failed");
+
+    for (token, amount) in tokens.into_iter().zip(amounts) {
+        let _ = swap_eth_for_exact_tokens(
+            provider,
+            router,
+            token,
+            amount,
+            U256::pow(U256::from(BASE), U256::from(MIN_ETH_DECIMALS)),
+            to,
+            deadline,
+        )
+        .await
+        .expect("SWAP_EXACT_ETH_FOR_TOKENS failed");
+
+        let _ = erc20::approve(&provider, token, router, U256::MAX)
+            .await
+            .expect("APPROVE failed");
+    }
+
+    Ok(())
+}
+
+pub async fn fetch_token0<P: Provider<Http<reqwest::Client>>>(
+    provider: &P,
     pair: Address,
 ) -> Result<Address> {
     // Fetch contract
-    let contract = UniswapV2Pair::new(pair, client.clone());
+    let contract = IUniswapV2Pair::new(pair, provider);
 
-    let token0 = contract.token_0().call().await?;
-    let token0_address = Address::from(token0);
+    let token0 = contract.token0().call().await?._0;
 
-    Ok(token0_address)
+    Ok(token0)
 }
 
-pub async fn fetch_token1(
-    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
+pub async fn fetch_token1<P: Provider<Http<reqwest::Client>>>(
+    provider: &P,
     pair: Address,
 ) -> Result<Address> {
     // Fetch contract
-    let contract = UniswapV2Pair::new(pair, client.clone());
+    let contract = IUniswapV2Pair::new(pair, provider);
 
-    let token0 = contract.token_1().call().await?;
-    let token0_address = Address::from(token0);
+    let token0 = contract.token1().call().await?._0;
 
-    Ok(token0_address)
+    Ok(token0)
 }
 
-pub async fn swap_exact_ethfor_tokens(
-    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-    router: Address,
+pub async fn swap_exact_ethfor_tokens<P: Provider<Http<reqwest::Client>>>(
+    provider: P,
+    router_addr: Address,
     token_b: Address,
     amount_eth: U256,
     amount_out_min: U256,
+    to: Address,
     deadline: U256,
-) -> Result<TransactionReceipt> {
-    // Fetch contract
-    let contract = create_uniswap_v2_router(client, router);
-
+) -> Result<FixedBytes<32>> {
+    let router = create_uniswap_v2_router(provider, router_addr);
     let path = vec![addresses::get_address(addresses::WETH), token_b];
 
-    let swap_call = contract
-        .swap_exact_eth_for_tokens(amount_out_min, path, client.address(), deadline)
+    let swap_call = router
+        .swapExactETHForTokens(amount_out_min, path, to, deadline)
         .value(amount_eth);
 
     let pending_tx = swap_call.send().await;
 
     match pending_tx {
-        Ok(tx) => Ok(tx.await?.unwrap_or(TransactionReceipt::default())),
+        Ok(tx) => Ok(tx.watch().await?),
         Err(e) => Err(e.into()),
     }
 }
 
-pub async fn swap_eth_for_exact_tokens(
-    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-    router: Address,
+pub async fn swap_eth_for_exact_tokens<P: Provider<Http<reqwest::Client>>>(
+    provider: P,
+    router_addr: Address,
     token_b: Address,
-    token_out: U256,
+    token_out_amount: U256,
     amount_eth: U256,
+    to: Address,
     deadline: U256,
-) -> Result<TransactionReceipt> {
-    // Fetch contract
-    let contract = create_uniswap_v2_router(client, router);
-
+) -> Result<FixedBytes<32>> {
+    let router = create_uniswap_v2_router(provider, router_addr);
     let path = vec![addresses::get_address(addresses::WETH), token_b];
 
-    let swap_call = contract
-        .swap_eth_for_exact_tokens(token_out, path, client.address(), deadline)
+    let swap_call = router
+        .swapETHForExactTokens(token_out_amount, path, to, deadline)
         .value(amount_eth);
 
     let pending_tx = swap_call.send().await;
 
     match pending_tx {
-        Ok(tx) => Ok(tx.await?.unwrap_or(TransactionReceipt::default())),
+        Ok(tx) => Ok(tx.watch().await?),
         Err(e) => Err(e.into()),
     }
 }
 
-pub async fn increase_liquidity(
-    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-    router: Address,
+pub async fn increase_liquidity<P: Provider<Http<reqwest::Client>>>(
+    provider: P,
+    router_addr: Address,
     args: router02interface::IncreaseLiquidityArgs,
+    owner: Address,
     deadline: U256,
-) -> Result<TransactionReceipt> {
-    let contract = create_uniswap_v2_router(client, router);
+) -> Result<FixedBytes<32>> {
+    let router = create_uniswap_v2_router(&provider, router_addr);
 
-    let addr = client.address();
-    let task_one = spawn({
-        let client = client.clone();
-        async move {
-            utils::check_approval_limit(&client, args.token_a, addr, router, args.amount_a_desired)
-                .await
-        }
-    });
-    let task_two = spawn({
-        let client = client.clone();
-        async move {
-            utils::check_approval_limit(&client, args.token_b, addr, router, args.amount_b_desired)
-                .await
-        }
-    });
+    let approval_one = {
+        erc20::check_approval_limit(
+            &provider,
+            args.token_a,
+            owner,
+            router_addr,
+            args.amount_a_desired,
+        )
+        .await
+    };
+    let approval_two = {
+        erc20::check_approval_limit(
+            &provider,
+            args.token_b,
+            owner,
+            router_addr,
+            args.amount_b_desired,
+        )
+        .await
+    };
 
-    let (approval_one, approval_two) = tokio::try_join!(task_one, task_two)?;
     if !(approval_one && approval_two) {
         return Err(eyre::eyre!("APPROVAL_LIMIT not met"));
     }
 
-    let add_liquidity_call = contract.add_liquidity(
+    let add_liquidity_call = router.addLiquidity(
         args.token_a,
         args.token_b,
         args.amount_a_desired,
@@ -162,20 +184,20 @@ pub async fn increase_liquidity(
     let pending_tx: std::result::Result<_, _> = add_liquidity_call.send().await;
 
     match pending_tx {
-        Ok(tx) => Ok(tx.await?.unwrap_or(TransactionReceipt::default())),
+        Ok(tx) => Ok(tx.watch().await?),
         Err(e) => Err(e.into()),
     }
 }
 
-pub async fn remove_liquidity(
-    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-    router: Address,
+pub async fn remove_liquidity<P: Provider<Http<reqwest::Client>>>(
+    provider: P,
+    router_addr: Address,
     args: router02interface::DecreaseLiquidityArgs,
     deadline: U256,
-) -> Result<TransactionReceipt> {
-    let contract = create_uniswap_v2_router(client, router);
+) -> Result<FixedBytes<32>> {
+    let router = create_uniswap_v2_router(&provider, router_addr);
 
-    let add_liquidity_call = contract.remove_liquidity(
+    let remove_liquidity_call = router.removeLiquidity(
         args.token_a,
         args.token_b,
         args.liquidity,
@@ -185,38 +207,31 @@ pub async fn remove_liquidity(
         deadline,
     );
 
-    let pending_tx = add_liquidity_call.send().await;
+    let pending_tx: std::result::Result<_, _> = remove_liquidity_call.send().await;
 
     match pending_tx {
-        Ok(tx) => Ok(tx.await?.unwrap_or(TransactionReceipt::default())),
+        Ok(tx) => Ok(tx.watch().await?),
         Err(e) => Err(e.into()),
     }
 }
 
 #[cfg(test)]
 mod tests {
-
-    use ethers::{
-        contract::ContractError, core::k256::ecdsa, providers::Middleware, signers::Wallet,
-    };
-
     use super::*;
     use crate::{erc20, setup, utils};
 
-    use std::sync::LazyLock;
-
-    static AMOUNT_DESIRED: LazyLock<ethers::types::U256> = LazyLock::new(|| U256::from(100000));
+    const AMOUNT_DESIRED: u64 = 100000;
 
     #[tokio::test]
     async fn test_token_fetch() {
-        let (_provider, client) = setup::test_setup().await;
+        let (provider, _client) = setup::test_setup().await;
 
         let pair = addresses::get_address(addresses::WETH_USDC_PAIR);
         let token0 = addresses::get_address(addresses::USDC_ADDR);
         let token1 = addresses::get_address(addresses::WETH);
 
-        assert_eq!(fetch_token0(&client, pair).await.unwrap(), token0);
-        assert_eq!(fetch_token1(&client, pair).await.unwrap(), token1);
+        assert_eq!(fetch_token0(&provider, pair).await.unwrap(), token0);
+        assert_eq!(fetch_token1(&provider, pair).await.unwrap(), token1);
     }
 
     #[tokio::test]
@@ -226,35 +241,32 @@ mod tests {
         let router = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
 
         // Assert that we currently have enough ETH
-        let eth_balance = provider.get_balance(client.address(), None).await.unwrap();
+        let eth_balance = provider.get_balance(client).await.unwrap();
         assert!(eth_balance > U256::from(1e18 as u32));
 
         let token_b = addresses::get_address(addresses::USDC_ADDR);
-        let amount_out_min = U256::zero();
-        let deadline = utils::get_block_timestamp_future(&provider, U256::from(600)).await;
+        let amount_out_min = U256::ZERO;
+        let deadline = utils::get_block_timestamp_future(&provider, DELAY)
+            .await
+            .expect("GET_BLOCK_TIMESTAMP failed");
 
         // Make sure we do not hold any USDC
-        let balance = erc20::balance_of(&client, token_b, client.address())
-            .await
-            .unwrap();
+        let balance = erc20::balance_of(&provider, token_b, client).await.unwrap();
 
         let receipt = swap_exact_ethfor_tokens(
-            &client,
+            &provider,
             router,
             token_b,
             U256::from(1e18 as u32),
             amount_out_min,
+            client,
             deadline,
         )
-        .await
-        .expect("SWAP_EXACT_ETH_FOR_TOKENS failed");
+        .await;
 
-        assert_eq!(receipt.status.unwrap().as_u64(), 1);
+        assert!(receipt.is_ok(), "SWAP_EXACT_ETH_FOR_TOKENS failed");
         assert!(
-            erc20::balance_of(&client, token_b, client.address())
-                .await
-                .unwrap()
-                > balance + amount_out_min
+            erc20::balance_of(&provider, token_b, client).await.unwrap() > balance + amount_out_min
         );
     }
 
@@ -265,35 +277,29 @@ mod tests {
         let router = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
 
         // Assert that we currently have enough ETH
-        let eth_balance = provider.get_balance(client.address(), None).await.unwrap();
-        assert!(eth_balance >= U256::exp10(18));
+        let eth_balance = provider.get_balance(client).await.unwrap();
+        assert!(eth_balance >= U256::pow(U256::from(BASE), U256::from(MIN_ETH_DECIMALS)));
 
         let token_b = addresses::get_address(addresses::USDC_ADDR);
-        let amount_out_min = U256::from(0);
-        let mut deadline = utils::get_block_timestamp_future(&provider, U256::from(0)).await;
+        let amount_out_min = U256::ZERO;
+        let mut deadline = utils::get_block_timestamp_future(&provider, 0)
+            .await
+            .expect("GET_BLOCK_TIMESTAMP failed");
 
         deadline -= U256::from(10);
 
         let receipt = swap_exact_ethfor_tokens(
-            &client,
+            &provider,
             router,
             token_b,
-            U256::exp10(18),
+            U256::from(1e18 as u32),
             amount_out_min,
+            client,
             deadline,
         )
         .await;
 
         assert!(receipt.is_err());
-        let err = receipt.unwrap_err();
-        let root = err.root_cause();
-
-        // Check if the root cause is specifically a ContractError::Revert
-        if let Some(contract_error) = root.downcast_ref::<ContractError<SignerMiddleware<Provider<Http>, Wallet<ecdsa::SigningKey>>>>() {
-            assert!(matches!(contract_error, ContractError::Revert(_)), "Expected a ContractError::Revert, but got a different error type.");
-        } else {
-            panic!("Expected a ContractError, but got a different error type.");
-        }
     }
 
     #[tokio::test]
@@ -303,23 +309,29 @@ mod tests {
         let router = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
 
         let token_b = addresses::get_address(addresses::USDC_ADDR);
-        let deadline = utils::get_block_timestamp_future(&provider, U256::from(600)).await;
-        let desired = *AMOUNT_DESIRED;
+        let deadline = utils::get_block_timestamp_future(&provider, DELAY)
+            .await
+            .expect("GET_BLOCK_TIMESTAMP failed");
+        let desired = U256::from(AMOUNT_DESIRED);
 
-        let _ = erc20::approve(&client, token_b, router, U256::max_value())
+        let _ = erc20::approve(&provider, token_b, router, U256::MAX)
             .await
             .unwrap();
 
-        let receipt =
-            swap_eth_for_exact_tokens(&client, router, token_b, desired, U256::exp10(18), deadline)
-                .await;
+        let receipt = swap_eth_for_exact_tokens(
+            &provider,
+            router,
+            token_b,
+            desired,
+            U256::pow(U256::from(BASE), U256::from(MIN_ETH_DECIMALS)),
+            client,
+            deadline,
+        )
+        .await;
 
         assert!(receipt.is_ok(), "SWAP_ETH_FOR_EXACT_TOKENS failed");
         assert!(
-            erc20::balance_of(&client, token_b, client.address())
-                .await
-                .unwrap()
-                >= desired,
+            erc20::balance_of(&provider, token_b, client).await.unwrap() >= desired,
             "TOKEN BALANCE is less than desired"
         );
     }
@@ -332,42 +344,36 @@ mod tests {
         let usdc = addresses::get_address(addresses::USDC_ADDR);
         let wbtc = addresses::get_address(addresses::WBTC);
         let pair = addresses::get_address(addresses::USDC_WBTC_PAIR);
-        crate::utils::buy_tokens_with_eth(
-            &provider,
-            client.clone(),
-            vec![usdc, wbtc],
-            vec![*AMOUNT_DESIRED, *AMOUNT_DESIRED],
-        )
-        .await
-        .unwrap();
-        let deadline = utils::get_block_timestamp_future(&provider, U256::from(600)).await;
+        let desired = U256::from(AMOUNT_DESIRED);
+
+        buy_tokens_with_eth(&provider, vec![usdc, wbtc], vec![desired, desired], client)
+            .await
+            .unwrap();
+        let deadline = utils::get_block_timestamp_future(&provider, DELAY)
+            .await
+            .expect("GET_BLOCK_TIMESTAMP failed");
 
         assert_eq!(
-            erc20::balance_of(&client, pair, client.address())
-                .await
-                .unwrap(),
-            U256::zero()
+            erc20::balance_of(&provider, pair, client).await.unwrap(),
+            U256::ZERO
         );
 
         let args = router02interface::IncreaseLiquidityArgs::new(
             usdc,
             wbtc,
-            *AMOUNT_DESIRED,
-            *AMOUNT_DESIRED,
-            U256::zero(),
-            U256::zero(),
-            client.address(),
+            desired,
+            desired,
+            U256::ZERO,
+            U256::ZERO,
+            client,
         );
 
         // Deposit liquidity
-        let receipt = increase_liquidity(&client, router, args, deadline).await;
+        let receipt = increase_liquidity(&provider, router, args, client, deadline).await;
 
         assert!(receipt.is_ok(), "INCREASE_LIQUIDITY failed");
         assert!(
-            erc20::balance_of(&client, pair, client.address())
-                .await
-                .unwrap()
-                > U256::zero(),
+            erc20::balance_of(&provider, pair, client).await.unwrap() > U256::ZERO,
             "LIQUIDITY BALANCE is zero"
         );
     }
@@ -379,28 +385,27 @@ mod tests {
         let router = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
         let usdc = addresses::get_address(addresses::USDC_ADDR);
         let wbtc = addresses::get_address(addresses::WBTC);
-        crate::utils::buy_tokens_with_eth(
-            &provider,
-            client.clone(),
-            vec![usdc, wbtc],
-            vec![*AMOUNT_DESIRED, *AMOUNT_DESIRED],
-        )
-        .await
-        .unwrap();
-        let deadline = utils::get_block_timestamp_future(&provider, U256::from(600)).await;
+        let desired = U256::from(AMOUNT_DESIRED);
+
+        buy_tokens_with_eth(&provider, vec![usdc, wbtc], vec![desired, desired], client)
+            .await
+            .unwrap();
+        let deadline = utils::get_block_timestamp_future(&provider, DELAY)
+            .await
+            .expect("GET_BLOCK_TIMESTAMP failed");
 
         let args = router02interface::IncreaseLiquidityArgs::new(
             usdc,
             wbtc,
-            *AMOUNT_DESIRED,
-            *AMOUNT_DESIRED,
-            U256::zero(),
-            U256::zero(),
-            client.address(),
+            desired,
+            desired,
+            U256::ZERO,
+            U256::ZERO,
+            client,
         );
 
         // Deposit liquidity
-        let receipt = increase_liquidity(&client, router, args, deadline).await;
+        let receipt = increase_liquidity(&provider, router, args, client, deadline).await;
 
         println!("{:#?}", receipt);
 
@@ -409,14 +414,12 @@ mod tests {
         assert!(receipt.is_ok(), "INCREASE_LIQUIDITY failed");
 
         let pair = addresses::get_address(addresses::USDC_WBTC_PAIR);
-        let liquidity = erc20::balance_of(&client, pair, client.address())
-            .await
-            .unwrap();
+        let liquidity = erc20::balance_of(&provider, pair, client).await.unwrap();
 
-        assert!(liquidity > U256::zero(), "LIQUIDITY BALANCE is zero");
+        assert!(liquidity > U256::ZERO, "LIQUIDITY BALANCE is zero");
 
         // Approve liquidity
-        let _ = erc20::approve(&client, pair, router, liquidity)
+        let _ = erc20::approve(&provider, pair, router, liquidity)
             .await
             .unwrap();
 
@@ -426,10 +429,10 @@ mod tests {
             liquidity,
             U256::from(1),
             U256::from(1),
-            client.address(),
+            client,
         );
 
-        let receipt = remove_liquidity(&client, router, args, deadline).await;
+        let receipt = remove_liquidity(&provider, router, args, deadline).await;
 
         println!("{:?}", receipt);
         assert!(receipt.is_ok(), "DECREASE_LIQUIDITY failed");

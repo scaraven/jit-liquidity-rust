@@ -1,74 +1,80 @@
-use std::sync::Arc;
-
-use ethers::{
-    contract::abigen,
-    core::types::{Address, U256},
-    middleware::SignerMiddleware,
-    providers::{Http, Provider},
-    signers::LocalWallet,
-    types::TransactionReceipt,
+use alloy::{
+    primitives::{Address, FixedBytes, U256},
+    providers::Provider,
+    sol,
+    transports::http::{reqwest, Http},
 };
 
 use eyre::Result;
+use IERC20Token::IERC20TokenInstance;
 
-abigen!(
-    ERC20Token,
-    r"[
-        approve(address spender, uint256 amount) external returns (bool)
-        transfer(address recipient, uint256 amount) external returns (bool)
-        transferFrom(address sender, address recipient, uint256 amount) external returns (bool)
-        balanceOf(address account) external view returns (uint256)
-        allowance(address owner, address spender) external view returns (uint256)
-    ]"
+sol!(
+    #[sol(rpc)]
+    "contracts/src/IERC20Token.sol"
 );
 
-fn create_erc20(
-    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-    token: Address,
-) -> Result<ERC20Token<SignerMiddleware<Provider<Http>, LocalWallet>>> {
-    Ok(ERC20Token::new(token, client.clone()))
+fn create_erc20_token<P: Provider<Http<reqwest::Client>>>(
+    provider: P,
+    address: Address,
+) -> IERC20TokenInstance<Http<reqwest::Client>, P> {
+    IERC20Token::new(address, provider)
 }
 
-pub async fn approve(
-    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-    token: Address,
+// Check that approval is over a limit
+pub async fn check_approval_limit<P: Provider<Http<reqwest::Client>>>(
+    provider: &P,
+    token_addr: Address,
+    owner: Address,
+    spender: Address,
+    desired: U256,
+) -> bool {
+    let allowance = allowance(&provider, token_addr, owner, spender)
+        .await
+        .expect("ALLOWANCE failed");
+    allowance >= desired
+}
+
+pub async fn approve<P: Provider<Http<reqwest::Client>>>(
+    provider: &P,
+    token_addr: Address,
     spender: Address,
     amount: U256,
-) -> Result<TransactionReceipt> {
-    let contract = create_erc20(client, token).unwrap();
+) -> Result<FixedBytes<32>> {
+    let contract = create_erc20_token(provider, token_addr);
 
-    let receipt_option = contract
-        .approve(spender, amount)
-        .send()
-        .await?
-        .await
-        .unwrap();
+    let builder = contract.approve(spender, amount);
 
-    // Checke whether we got an approve event
-    Ok(receipt_option.unwrap())
+    let tx_hash = builder.send().await.unwrap().watch().await;
+
+    tx_hash.map_err(|e| e.into())
 }
 
-pub async fn balance_of(
-    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-    token: Address,
+pub async fn balance_of<P: Provider<Http<reqwest::Client>>>(
+    provider: &P,
+    token_addr: Address,
     spender: Address,
 ) -> Result<U256> {
-    let contract = create_erc20(client, token).unwrap();
+    let contract = create_erc20_token(provider, token_addr);
 
-    let balance = contract.balance_of(spender).call().await?;
+    let balance = contract.balanceOf(spender).call().await.unwrap().amount;
 
     Ok(balance)
 }
 
-pub async fn allowance(
-    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-    token: Address,
+pub async fn allowance<P: Provider<Http<reqwest::Client>>>(
+    provider: &P,
+    token_addr: Address,
     owner: Address,
     spender: Address,
 ) -> Result<U256> {
-    let contract = create_erc20(client, token).unwrap();
+    let contract = create_erc20_token(provider, token_addr);
 
-    let allowance = contract.allowance(owner, spender).call().await?;
+    let allowance = contract
+        .allowance(owner, spender)
+        .call()
+        .await
+        .unwrap()
+        .amount;
 
     Ok(allowance)
 }
@@ -84,32 +90,33 @@ mod tests {
     async fn check_balance_zero() {
         let random_addr = addresses::get_address("0x8BB0080aC1006D407dfe84D29013964aCC1b9C00");
 
-        let (_provider, client) = setup::test_setup().await;
+        let (provider, _) = setup::test_setup().await;
 
         let balance_random = balance_of(
-            &client,
+            &provider,
             addresses::get_address(addresses::WETH),
             random_addr,
         )
         .await
         .expect("BALANCE_OF failed");
-        assert_eq!(balance_random.as_u64(), 0);
+        assert_eq!(balance_random, U256::from(0));
     }
 
     #[tokio::test]
     async fn check_balance_whale() {
         let whale_addr = addresses::get_address("0xD6c32E35D6A169C77786430ac7b257fF6bb480C3");
+        const EXPECTED: u64 = 236000000000000;
 
-        let (_provider, client) = setup::test_setup().await;
+        let (provider, _) = setup::test_setup().await;
 
         let balance_whale = balance_of(
-            &client,
+            &provider,
             addresses::get_address(addresses::USDC_ADDR),
             whale_addr,
         )
         .await
         .expect("BALANCE_OF failed");
-        assert_eq!(balance_whale.as_u64(), 236000000000000);
+        assert_eq!(balance_whale, U256::from(EXPECTED));
     }
 
     #[tokio::test]
@@ -117,25 +124,23 @@ mod tests {
         let whale_addr = addresses::get_address("0xD6c32E35D6A169C77786430ac7b257fF6bb480C3");
         let amount = U256::from(1e18 as u32);
 
-        let (_provider, client) = setup::test_setup().await;
+        let (provider, address) = setup::test_setup().await;
 
-        let receipt = approve(
-            &client,
+        let approve = approve(
+            &provider,
             addresses::get_address(addresses::WETH),
             whale_addr,
             amount,
         )
-        .await
-        .expect("APPROVE failed");
+        .await;
 
-        // Fetch approval
-        assert_eq!(receipt.status.expect("APPROVE reverted"), (1_u64).into());
+        assert!(approve.is_ok(), "APPROVE failed");
 
         // Ensure that allowance is now 1e18
         let allowance = allowance(
-            &client,
+            &provider,
             addresses::get_address(addresses::WETH),
-            client.address(),
+            address,
             whale_addr,
         )
         .await
