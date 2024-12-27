@@ -4,9 +4,11 @@ on:
   push:
     paths:
       - 'contracts/**'
+      - '.github/workflows/solidity.yml'
   pull_request:
     paths:
       - 'contracts/**'
+      - '.github/workflows/solidity.yml'
 
 env:
   FOUNDRY_PROFILE: ci
@@ -31,7 +33,6 @@ jobs:
 
       - name: Show Forge version
         run: |
-          cd contracts
           forge --version
 
       - name: Run Forge fmt

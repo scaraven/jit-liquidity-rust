@@ -47,7 +47,7 @@ async fn main() -> Result<()> {
     println!("ETH balance: {:?}", eth_balance);
 
     // Fetch pair address
-    let pair = addresses::get_address(addresses::WETH_USDC_PAIR);
+    let pair = addresses::get_address(addresses::USDC_WBTC_PAIR);
 
     let token0_address = router02::fetch_token0(&provider, pair).await?;
     let token1_address = router02::fetch_token1(&provider, pair).await?;
