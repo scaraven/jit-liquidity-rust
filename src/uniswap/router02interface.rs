@@ -1,4 +1,4 @@
-use ethers::types::{Address, U256};
+use alloy::primitives::{Address, U256};
 
 pub struct DecreaseLiquidityArgs {
     pub token_a: Address,

@@ -1,70 +1,32 @@
-use std::sync::Arc;
-
-use ethers::{
-    middleware::SignerMiddleware,
-    providers::{Http, JsonRpcClient, Middleware, Provider},
-    signers::LocalWallet,
-    types::{Address, U256},
+use alloy::{
+    eips::BlockNumberOrTag,
+    primitives::U256,
+    providers::Provider,
+    rpc::types::BlockTransactionsKind,
+    transports::http::{reqwest, Http},
 };
-use eyre::Result;
+use eyre::{eyre, Result};
 
-use crate::erc20;
+macro_rules! pow {
+    ($base:expr, $exp:expr) => {
+        U256::pow(U256::from($base), U256::from($exp))
+    };
+    () => {};
+}
 
 // Get block timestamp
-pub async fn get_block_timestamp_future<C: JsonRpcClient>(
-    provider: &Provider<C>,
-    seconds: U256,
-) -> U256 {
-    let block_number = provider.get_block_number().await.unwrap();
-    let block = provider.get_block(block_number).await.unwrap().unwrap();
-
-    block.timestamp + seconds
-}
-
-// Check that approval is over a limit
-pub async fn check_approval_limit(
-    client: &Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-    token: Address,
-    owner: Address,
-    spender: Address,
-    desired: U256,
-) -> bool {
-    let allowance = erc20::allowance(client, token, owner, spender)
+pub async fn get_block_timestamp_future(
+    provider: &impl Provider<Http<reqwest::Client>>,
+    seconds: u64,
+) -> Result<U256> {
+    let block = provider
+        .get_block_by_number(BlockNumberOrTag::Latest, BlockTransactionsKind::Hashes)
         .await
-        .expect("ALLOWANCE failed");
-    allowance >= desired
-}
+        .expect("GET_BLOCK_BY_NUMBER failed");
 
-pub async fn buy_tokens_with_eth(
-    provider: &Provider<Http>,
-    client: Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
-    tokens: Vec<ethers::types::Address>,
-    amounts: Vec<ethers::types::U256>,
-) -> Result<()> {
-    use ethers::types::U256;
-
-    use crate::{addresses, erc20, router02, utils::get_block_timestamp_future};
-
-    let router = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
-    let deadline = get_block_timestamp_future(provider, U256::from(600)).await;
-
-    for (token, amount) in tokens.into_iter().zip(amounts) {
-        let _ = router02::swap_eth_for_exact_tokens(
-            &client,
-            router,
-            token,
-            amount,
-            U256::exp10(18),
-            deadline,
-        )
-        .await
-        .expect("SWAP_EXACT_ETH_FOR_TOKENS failed");
-        let _ = erc20::approve(&client, token, router, U256::max_value())
-            .await
-            .expect("APPROVE failed");
-    }
-
-    Ok(())
+    block
+        .ok_or(eyre!("Block not found"))
+        .map(|block| U256::from(block.header.timestamp + seconds))
 }
 
 #[cfg(test)]
@@ -78,14 +40,17 @@ mod tests {
         const DELAY: u64 = 10;
         let (provider, _) = setup::test_setup().await;
 
-        let timestamp = get_block_timestamp_future(&provider, U256::zero())
-            .await
-            .as_u64();
+        let timestamp_result = get_block_timestamp_future(&provider, 0).await;
+
+        assert!(timestamp_result.is_ok());
+
+        let timestamp = timestamp_result.unwrap();
+
         assert_eq!(
-            get_block_timestamp_future(&provider, U256::from(DELAY))
+            get_block_timestamp_future(&provider, DELAY)
                 .await
-                .as_u64(),
-            timestamp + DELAY
+                .expect("GET_BLOCK_TIMESTAMP failed"),
+            timestamp + U256::from(DELAY)
         );
     }
 }

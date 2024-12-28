@@ -3,17 +3,48 @@ repos:
     rev: v1.0
     hooks:
       - id: fmt
+        types: [file, rust]
       - id: cargo-check
+        types: [file, rust]
+
 
   - repo: local
     hooks:
       - id: rust-clippy
         name: Rust clippy
         description: Run cargo clippy on files included in the commit. clippy should be installed before-hand.
-        entry: cargo clippy --all-targets --all-features -- -Dclippy::all
+        entry: cargo clippy --all-targets --all-features -- -Dclippy::all -Wclippy::too_many_arguments
         pass_filenames: false
         types: [file, rust]
         language: system
+
+      - id: forge-fmt
+        name: Forge fmt
+        description: Run forge fmt on files included in the commit. forge should be installed before-hand.
+        entry: bash -c 'cd contracts && forge fmt --check'
+        pass_filenames: false
+        types: [file]
+        language: system
+        files: ^contracts/.*\.sol$
+
+      - id: forge-build
+        name: Forge build
+        description: Run forge build on files included in the commit. forge should be installed before-hand.
+        entry: bash -c 'cd contracts && forge build --sizes'
+        pass_filenames: false
+        types: [file]
+        language: system
+        files: ^contracts/.*\.sol$
+
+      - id: forge-test
+        name: Forge test
+        description: Run forge test on files included in the commit. forge should be installed before-hand.
+        entry: bash -c 'cd contracts && forge test -vvv'
+        pass_filenames: false
+        types: [file]
+        language: system
+        files: ^contracts/.*\.sol$
+
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
