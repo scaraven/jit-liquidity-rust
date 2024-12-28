@@ -24,6 +24,9 @@ mod setup;
 #[path = "utils/addresses.rs"]
 mod addresses;
 
+#[path = "watcher/subscribe.rs"]
+mod subscribe;
+
 #[cfg(test)]
 #[path = "testconfig.rs"]
 mod testconfig;
