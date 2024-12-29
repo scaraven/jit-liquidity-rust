@@ -27,6 +27,9 @@ mod addresses;
 #[path = "watcher/subscribe.rs"]
 mod subscribe;
 
+#[path = "simulation/engine.rs"]
+mod engine;
+
 #[cfg(test)]
 #[path = "testconfig.rs"]
 mod testconfig;

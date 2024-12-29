@@ -9,7 +9,7 @@ use alloy::{
 };
 use eyre::Result;
 use futures_util::StreamExt;
-use tokio::task::JoinHandle;
+use tokio::{sync::Mutex, task::JoinHandle};
 
 #[derive(Clone, Debug)]
 pub enum FilterType {
@@ -41,6 +41,7 @@ fn filter(tx: &Transaction, filter_type: FilterType) -> bool {
 pub async fn subscribe_to_pending<P>(
     provider: Arc<P>,
     filter_type: FilterType,
+    tx_buffer: Arc<Mutex<Vec<Transaction>>>,
 ) -> Result<JoinHandle<()>>
 where
     P: Provider<PubSubFrontend> + Send + Sync + 'static,
@@ -77,8 +78,10 @@ where
     let handle = tokio::spawn(async move {
         let mut stream = Box::pin(stream);
         while let Some(tx) = stream.as_mut().next().await {
-            // Get the transaction details.
+            // Add transaction to buffer
             println!("Pending transaction: {:#?}", tx);
+            let mut buffer = tx_buffer.lock().await;
+            buffer.push(tx);
         }
     });
 
@@ -112,10 +115,16 @@ mod tests {
         let (http_provider, http_addr) = setup::test_setup().await;
 
         let provider = Arc::new(ws_provider);
+        let tx_buffer = Arc::new(Mutex::new(Vec::new()));
+
         // Start monitoring pending transactions
-        let handle = subscribe_to_pending(provider.clone(), FilterType::Recipient(http_addr))
-            .await
-            .unwrap();
+        let handle = subscribe_to_pending(
+            provider.clone(),
+            FilterType::Recipient(http_addr),
+            tx_buffer.clone(),
+        )
+        .await
+        .unwrap();
 
         // Send a transaction to ourselves
         let _ = http_provider
@@ -131,5 +140,9 @@ mod tests {
             .unwrap();
 
         assert!(handle.await.is_ok(), "Error in pending transaction stream");
+
+        // acquire mutex after stream has finished
+        let buffer = tx_buffer.lock().await;
+        assert!(buffer.len() == 1, "No transactions received");
     }
 }
