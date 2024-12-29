@@ -12,7 +12,7 @@ use futures_util::StreamExt;
 use tokio::{sync::Mutex, task::JoinHandle};
 
 #[derive(Clone, Debug)]
-pub enum FilterType {
+pub enum ShallowFilterType {
     Recipient(Address),
     None,
 }
@@ -31,16 +31,16 @@ fn filter_by_addr(tx: &Transaction, expected: Address) -> bool {
     }
 }
 
-fn filter(tx: &Transaction, filter_type: FilterType) -> bool {
+fn filter(tx: &Transaction, filter_type: ShallowFilterType) -> bool {
     match filter_type {
-        FilterType::Recipient(addr) => filter_by_addr(tx, addr),
-        FilterType::None => true,
+        ShallowFilterType::Recipient(addr) => filter_by_addr(tx, addr),
+        ShallowFilterType::None => true,
     }
 }
 
 pub async fn subscribe_to_pending<P>(
     provider: Arc<P>,
-    filter_type: FilterType,
+    filter_type: ShallowFilterType,
     tx_buffer: Arc<Mutex<Vec<Transaction>>>,
 ) -> Result<JoinHandle<()>>
 where
@@ -120,7 +120,7 @@ mod tests {
         // Start monitoring pending transactions
         let handle = subscribe_to_pending(
             provider.clone(),
-            FilterType::Recipient(http_addr),
+            ShallowFilterType::Recipient(http_addr),
             tx_buffer.clone(),
         )
         .await
