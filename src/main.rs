@@ -5,6 +5,9 @@ use alloy::providers::{Provider, ProviderBuilder};
 
 use eyre::Result;
 
+#[path = "simulation/tracing.rs"]
+mod tracing;
+
 #[path = "config.rs"]
 mod config;
 
