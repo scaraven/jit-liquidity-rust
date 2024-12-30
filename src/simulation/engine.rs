@@ -99,12 +99,7 @@ mod tests {
     #[tokio::test]
     pub async fn test_bundle_execute() {
         // Use reth node for testing
-        let provider = setup::setup_provider(
-            Url::parse("https://mainnet.infura.io/v3/1c52f833999d434fb8d9220e8d47306d").unwrap(),
-            PrivateKeySigner::random(),
-        )
-        .await;
-        //let (provider, _client) = setup::test_setup().await;
+        let (provider, _client) = setup::test_setup().await;
         let provider = Arc::new(provider);
 
         let bob = Address::from_str("0xc0ffee254729296a45a3885639AC7E10F9d54979").unwrap();
@@ -112,7 +107,7 @@ mod tests {
 
         let tx = TransactionRequest::default().to(bob).value(U256::from(100));
 
-        let bundle = vec![
+        let _bundle = vec![
             TransactionRequest::default().to(bob).value(U256::from(150)),
             TransactionRequest::default().to(dan).value(U256::from(250)),
         ];
