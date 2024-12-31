@@ -33,6 +33,9 @@ mod subscribe;
 #[path = "simulation/engine.rs"]
 mod engine;
 
+#[path = "simulation/engine_filter.rs"]
+mod engine_filter;
+
 #[cfg(test)]
 #[path = "testconfig.rs"]
 mod testconfig;
