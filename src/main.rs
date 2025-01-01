@@ -12,7 +12,7 @@ mod tracing;
 #[path = "config.rs"]
 mod config;
 
-#[path = "uniswap/router02.rs"]
+#[path = "interfaces/router02.rs"]
 mod router02;
 
 #[path = "interfaces/erc20.rs"]
