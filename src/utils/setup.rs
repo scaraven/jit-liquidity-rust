@@ -12,6 +12,8 @@ use alloy::{
     },
 };
 
+use crate::testconfig;
+
 pub async fn setup_provider_with_anvil(rpc_url: Option<Url>) -> impl Provider<BoxTransport> {
     let builder = ProviderBuilder::default().with_recommended_fillers();
 
@@ -32,7 +34,6 @@ pub async fn setup_provider(
 }
 
 // Given a spun up Anvil instance, return a provider
-#[cfg(test)]
 pub async fn test_setup() -> (impl Provider<Http<reqwest::Client>>, Address) {
     use alloy::{
         network::{EthereumWallet, TransactionBuilder},
@@ -45,7 +46,7 @@ pub async fn test_setup() -> (impl Provider<Http<reqwest::Client>>, Address) {
 
     const HUNDRED_ETH_DECIMALS: usize = 20;
 
-    let config = crate::testconfig::TestConfig::load();
+    let config = testconfig::TestConfig::load();
     let signer = PrivateKeySigner::random();
     let address = signer.address();
     let wallet = EthereumWallet::new(signer);

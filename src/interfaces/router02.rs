@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use alloy::{
     primitives::{Address, FixedBytes, U256},
     providers::Provider,

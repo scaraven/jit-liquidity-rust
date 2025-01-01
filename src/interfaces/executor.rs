@@ -1,5 +1,5 @@
 use alloy::{
-    primitives::{Bytes, FixedBytes, U256},
+    primitives::{FixedBytes, U256},
     providers::Provider,
     rpc::types::TransactionRequest,
     transports::http::{Client, Http},
@@ -19,11 +19,6 @@ impl<'a, P: Provider<Http<Client>>> Executor<'a, P> {
 
     pub async fn send(self) -> Result<FixedBytes<32>> {
         let result = self.provider.send_transaction(self.tx).await?.watch().await;
-        Ok(result?)
-    }
-
-    pub async fn call(self) -> Result<Bytes> {
-        let result = self.provider.call(&self.tx).await;
         Ok(result?)
     }
 

@@ -3,46 +3,9 @@ use alloy::node_bindings::Anvil;
 use alloy::primitives::U256;
 use alloy::providers::{Provider, ProviderBuilder};
 
-use executor::Executor;
 use eyre::Result;
 
-#[path = "simulation/tracing.rs"]
-mod tracing;
-
-#[path = "config.rs"]
-mod config;
-
-#[path = "interfaces/router02.rs"]
-mod router02;
-
-#[path = "interfaces/erc20.rs"]
-mod erc20;
-
-#[macro_use]
-#[path = "utils/utils.rs"]
-mod utils;
-
-#[path = "utils/setup.rs"]
-mod setup;
-
-#[path = "utils/addresses.rs"]
-mod addresses;
-
-#[path = "watcher/subscribe.rs"]
-mod subscribe;
-
-#[path = "simulation/engine.rs"]
-mod engine;
-
-#[path = "simulation/engine_filter.rs"]
-mod engine_filter;
-
-#[path = "interfaces/executor.rs"]
-mod executor;
-
-#[cfg(test)]
-#[path = "testconfig.rs"]
-mod testconfig;
+use jit_liquidity_rust::{addresses, config, erc20, executor::Executor, pow, router02, utils};
 
 #[tokio::main]
 async fn main() -> Result<()> {

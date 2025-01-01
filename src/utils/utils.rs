@@ -6,8 +6,9 @@ use alloy::{
     transports::http::{reqwest, Http},
 };
 use eyre::{eyre, Result};
-use revm::primitives::{bitvec::view::BitViewSized, FixedBytes};
+use revm::primitives::FixedBytes;
 
+#[macro_export]
 macro_rules! pow {
     ($base:expr, $exp:expr) => {
         U256::pow(U256::from($base), U256::from($exp))
