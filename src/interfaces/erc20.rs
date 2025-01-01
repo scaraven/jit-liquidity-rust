@@ -73,6 +73,17 @@ pub fn allowance<P: Provider<Http<reqwest::Client>>>(
         .into_transaction_request()
 }
 
+pub fn transfer<P: Provider<Http<reqwest::Client>>>(
+    provider: &P,
+    token_addr: Address,
+    to: Address,
+    amount: U256,
+) -> TransactionRequest {
+    let contract = create_erc20_token(provider, token_addr);
+
+    contract.transfer(to, amount).into_transaction_request()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

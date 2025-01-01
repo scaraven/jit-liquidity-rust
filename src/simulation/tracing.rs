@@ -92,10 +92,12 @@ pub fn init_cache_db<T: Transport + Clone, N: Network, P: Provider<T, N>>(
 mod tests {
     use std::str::FromStr;
 
-    use alloy::eips::BlockNumberOrTag;
-    use revm::primitives::{Address, U256};
+    use alloy::{
+        eips::BlockNumberOrTag,
+        primitives::{Address, FixedBytes, U256},
+    };
 
-    use crate::setup;
+    use crate::{addresses, erc20, setup, utils};
 
     use super::*;
 
@@ -191,6 +193,43 @@ mod tests {
 
         let mut cache_db = init_cache_db(provider.clone(), BlockNumberOrTag::Latest.into());
 
+        const VALUE: i32 = 150;
+        let bob = addresses::get_address("0x7E219AAf9339eA8f08c381632DEe3CeC94AA4054");
+        let weth = addresses::get_address(addresses::WETH);
+
+        const BALANCE_SLOT: u8 = 3;
+        let storage_slot = utils::calculate_slot_mapping(
+            FixedBytes::<32>::left_padding_from(&bob.into_array()).to_vec(),
+            BALANCE_SLOT,
+        );
+        println!("{:?}", storage_slot);
+
         // Create an erc20 transaction request and execute it with revm
+        let tx = erc20::transfer(&provider, weth, bob, U256::from(VALUE));
+
+        let result = revm_call_read_only(&mut cache_db, tx);
+        assert!(result.is_ok());
+
+        let log = result.unwrap();
+
+        println!("{:?}", log.state);
+
+        assert!(log.state.contains_key(&weth));
+        assert!(log
+            .state
+            .get(&weth)
+            .unwrap()
+            .storage
+            .contains_key(&storage_slot));
+
+        let slot_changed = log
+            .state
+            .get(&weth)
+            .unwrap()
+            .storage
+            .get(&storage_slot)
+            .unwrap();
+        assert_eq!(slot_changed.original_value, U256::ZERO);
+        assert_eq!(slot_changed.present_value, U256::from(VALUE));
     }
 }

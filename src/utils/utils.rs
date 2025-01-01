@@ -1,11 +1,12 @@
 use alloy::{
     eips::BlockNumberOrTag,
-    primitives::U256,
+    primitives::{Keccak256, U256},
     providers::Provider,
     rpc::types::BlockTransactionsKind,
     transports::http::{reqwest, Http},
 };
 use eyre::{eyre, Result};
+use revm::primitives::{bitvec::view::BitViewSized, FixedBytes};
 
 macro_rules! pow {
     ($base:expr, $exp:expr) => {
@@ -27,6 +28,21 @@ pub async fn get_block_timestamp_future(
     block
         .ok_or(eyre!("Block not found"))
         .map(|block| U256::from(block.header.timestamp + seconds))
+}
+
+pub fn calculate_slot_mapping(info: Vec<u8>, slot_value: u8) -> U256 {
+    let mut storage_key = info.clone();
+    let padded_slot = FixedBytes::<32>::left_padding_from(&[slot_value]).to_vec();
+
+    storage_key.extend(padded_slot);
+
+    let mut storage_slot = Keccak256::new();
+    storage_slot.update(storage_key);
+    // If we error, then Keccak256 is not retuning 32 byte hashes
+    U256::from_be_bytes(
+        <[u8; 32]>::try_from(storage_slot.finalize().as_slice())
+            .expect("slice with incorrect length"),
+    )
 }
 
 #[cfg(test)]
