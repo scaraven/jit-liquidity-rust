@@ -1,12 +1,14 @@
 use alloy::{
-    primitives::{Address, FixedBytes, U256},
+    primitives::{Address, U256},
     providers::Provider,
+    rpc::types::TransactionRequest,
     sol,
     transports::http::{reqwest, Http},
 };
 
-use eyre::Result;
 use IERC20Token::IERC20TokenInstance;
+
+use crate::executor::Executor;
 
 sol!(
     #[sol(rpc)]
@@ -28,55 +30,47 @@ pub async fn check_approval_limit<P: Provider<Http<reqwest::Client>>>(
     spender: Address,
     desired: U256,
 ) -> bool {
-    let allowance = allowance(&provider, token_addr, owner, spender)
+    let allowance_tx = allowance(&provider, token_addr, owner, spender);
+    let allowance = Executor::new(provider, allowance_tx)
+        .call_return_uint()
         .await
         .expect("ALLOWANCE failed");
+
     allowance >= desired
 }
 
-pub async fn approve<P: Provider<Http<reqwest::Client>>>(
+pub fn approve<P: Provider<Http<reqwest::Client>>>(
     provider: &P,
     token_addr: Address,
     spender: Address,
     amount: U256,
-) -> Result<FixedBytes<32>> {
+) -> TransactionRequest {
     let contract = create_erc20_token(provider, token_addr);
 
-    let builder = contract.approve(spender, amount);
-
-    let tx_hash = builder.send().await.unwrap().watch().await;
-
-    tx_hash.map_err(|e| e.into())
+    contract.approve(spender, amount).into_transaction_request()
 }
 
-pub async fn balance_of<P: Provider<Http<reqwest::Client>>>(
+pub fn balance_of<P: Provider<Http<reqwest::Client>>>(
     provider: &P,
     token_addr: Address,
     spender: Address,
-) -> Result<U256> {
+) -> TransactionRequest {
     let contract = create_erc20_token(provider, token_addr);
 
-    let balance = contract.balanceOf(spender).call().await.unwrap().amount;
-
-    Ok(balance)
+    contract.balanceOf(spender).into_transaction_request()
 }
 
-pub async fn allowance<P: Provider<Http<reqwest::Client>>>(
+pub fn allowance<P: Provider<Http<reqwest::Client>>>(
     provider: &P,
     token_addr: Address,
     owner: Address,
     spender: Address,
-) -> Result<U256> {
+) -> TransactionRequest {
     let contract = create_erc20_token(provider, token_addr);
 
-    let allowance = contract
+    contract
         .allowance(owner, spender)
-        .call()
-        .await
-        .unwrap()
-        .amount;
-
-    Ok(allowance)
+        .into_transaction_request()
 }
 
 #[cfg(test)]
@@ -92,13 +86,18 @@ mod tests {
 
         let (provider, _) = setup::test_setup().await;
 
-        let balance_random = balance_of(
+        let balance_random = Executor::new(
             &provider,
-            addresses::get_address(addresses::WETH),
-            random_addr,
+            balance_of(
+                &provider,
+                addresses::get_address(addresses::WETH),
+                random_addr,
+            ),
         )
+        .call_return_uint()
         .await
         .expect("BALANCE_OF failed");
+
         assert_eq!(balance_random, U256::from(0));
     }
 
@@ -109,11 +108,15 @@ mod tests {
 
         let (provider, _) = setup::test_setup().await;
 
-        let balance_whale = balance_of(
+        let balance_whale = Executor::new(
             &provider,
-            addresses::get_address(addresses::USDC_ADDR),
-            whale_addr,
+            balance_of(
+                &provider,
+                addresses::get_address(addresses::USDC_ADDR),
+                whale_addr,
+            ),
         )
+        .call_return_uint()
         .await
         .expect("BALANCE_OF failed");
         assert_eq!(balance_whale, U256::from(EXPECTED));
@@ -126,23 +129,31 @@ mod tests {
 
         let (provider, address) = setup::test_setup().await;
 
-        let approve = approve(
+        let approve = Executor::new(
             &provider,
-            addresses::get_address(addresses::WETH),
-            whale_addr,
-            amount,
+            approve(
+                &provider,
+                addresses::get_address(addresses::WETH),
+                whale_addr,
+                amount,
+            ),
         )
+        .send()
         .await;
 
         assert!(approve.is_ok(), "APPROVE failed");
 
         // Ensure that allowance is now 1e18
-        let allowance = allowance(
+        let allowance = Executor::new(
             &provider,
-            addresses::get_address(addresses::WETH),
-            address,
-            whale_addr,
+            allowance(
+                &provider,
+                addresses::get_address(addresses::WETH),
+                address,
+                whale_addr,
+            ),
         )
+        .call_return_uint()
         .await
         .expect("ALLOWANCE failed");
 

@@ -183,4 +183,14 @@ mod tests {
             U256::from(3 * VALUE)
         );
     }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    pub async fn test_revm_erc20_call() {
+        let (provider, client) = setup::test_setup().await;
+        let provider = Arc::new(provider);
+
+        let mut cache_db = init_cache_db(provider.clone(), BlockNumberOrTag::Latest.into());
+
+        // Create an erc20 transaction request and execute it with revm
+    }
 }

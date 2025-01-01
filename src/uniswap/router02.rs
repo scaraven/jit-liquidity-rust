@@ -2,13 +2,14 @@
 use alloy::{
     primitives::{Address, FixedBytes, U256},
     providers::Provider,
+    rpc::types::TransactionRequest,
     sol,
     transports::http::{reqwest, Http},
 };
 use eyre::Result;
 use IUniswapV2Router::IUniswapV2RouterInstance;
 
-use crate::{addresses, erc20, utils};
+use crate::{addresses, erc20, executor::Executor, utils};
 
 mod router02interface;
 
@@ -45,21 +46,29 @@ pub async fn buy_tokens_with_eth<P: Provider<Http<reqwest::Client>>>(
         .expect("GET_BLOCK_TIMESTAMP failed");
 
     for (token, amount) in tokens.into_iter().zip(amounts) {
-        let _ = swap_eth_for_exact_tokens(
+        let _ = Executor::new(
             provider,
-            router,
-            token,
-            amount,
-            U256::pow(U256::from(BASE), U256::from(MIN_ETH_DECIMALS)),
-            to,
-            deadline,
+            swap_eth_for_exact_tokens(
+                provider,
+                router,
+                token,
+                amount,
+                U256::pow(U256::from(BASE), U256::from(MIN_ETH_DECIMALS)),
+                to,
+                deadline,
+            ),
         )
+        .send()
         .await
         .expect("SWAP_EXACT_ETH_FOR_TOKENS failed");
 
-        let _ = erc20::approve(&provider, token, router, U256::MAX)
-            .await
-            .expect("APPROVE failed");
+        let _ = Executor::new(
+            provider,
+            erc20::approve(&provider, token, router, U256::MAX),
+        )
+        .send()
+        .await
+        .expect("APPROVE failed");
     }
 
     Ok(())
@@ -89,7 +98,7 @@ pub async fn fetch_token1<P: Provider<Http<reqwest::Client>>>(
     Ok(token0)
 }
 
-pub async fn swap_exact_ethfor_tokens<P: Provider<Http<reqwest::Client>>>(
+pub fn swap_exact_ethfor_tokens<P: Provider<Http<reqwest::Client>>>(
     provider: P,
     router_addr: Address,
     token_b: Address,
@@ -97,23 +106,17 @@ pub async fn swap_exact_ethfor_tokens<P: Provider<Http<reqwest::Client>>>(
     amount_out_min: U256,
     to: Address,
     deadline: U256,
-) -> Result<FixedBytes<32>> {
+) -> TransactionRequest {
     let router = create_uniswap_v2_router(provider, router_addr);
     let path = vec![addresses::get_address(addresses::WETH), token_b];
 
-    let swap_call = router
+    router
         .swapExactETHForTokens(amount_out_min, path, to, deadline)
-        .value(amount_eth);
-
-    let pending_tx = swap_call.send().await;
-
-    match pending_tx {
-        Ok(tx) => Ok(tx.watch().await?),
-        Err(e) => Err(e.into()),
-    }
+        .value(amount_eth)
+        .into_transaction_request()
 }
 
-pub async fn swap_eth_for_exact_tokens<P: Provider<Http<reqwest::Client>>>(
+pub fn swap_eth_for_exact_tokens<P: Provider<Http<reqwest::Client>>>(
     provider: P,
     router_addr: Address,
     token_b: Address,
@@ -121,31 +124,45 @@ pub async fn swap_eth_for_exact_tokens<P: Provider<Http<reqwest::Client>>>(
     amount_eth: U256,
     to: Address,
     deadline: U256,
-) -> Result<FixedBytes<32>> {
+) -> TransactionRequest {
     let router = create_uniswap_v2_router(provider, router_addr);
     let path = vec![addresses::get_address(addresses::WETH), token_b];
 
-    let swap_call = router
+    router
         .swapETHForExactTokens(token_out_amount, path, to, deadline)
-        .value(amount_eth);
-
-    let pending_tx = swap_call.send().await;
-
-    match pending_tx {
-        Ok(tx) => Ok(tx.watch().await?),
-        Err(e) => Err(e.into()),
-    }
+        .value(amount_eth)
+        .into_transaction_request()
 }
 
-pub async fn increase_liquidity<P: Provider<Http<reqwest::Client>>>(
+pub fn increase_liquidity<P: Provider<Http<reqwest::Client>>>(
+    provider: P,
+    router_addr: Address,
+    args: router02interface::IncreaseLiquidityArgs,
+    deadline: U256,
+) -> TransactionRequest {
+    let router = create_uniswap_v2_router(provider, router_addr);
+
+    router
+        .addLiquidity(
+            args.token_a,
+            args.token_b,
+            args.amount_a_desired,
+            args.amount_b_desired,
+            args.amount_a_min,
+            args.amount_b_min,
+            args.to,
+            deadline,
+        )
+        .into_transaction_request()
+}
+
+pub async fn increase_liquidity_execute<P: Provider<Http<reqwest::Client>>>(
     provider: P,
     router_addr: Address,
     args: router02interface::IncreaseLiquidityArgs,
     owner: Address,
     deadline: U256,
 ) -> Result<FixedBytes<32>> {
-    let router = create_uniswap_v2_router(&provider, router_addr);
-
     let approval_one = {
         erc20::check_approval_limit(
             &provider,
@@ -171,49 +188,30 @@ pub async fn increase_liquidity<P: Provider<Http<reqwest::Client>>>(
         return Err(eyre::eyre!("APPROVAL_LIMIT not met"));
     }
 
-    let add_liquidity_call = router.addLiquidity(
-        args.token_a,
-        args.token_b,
-        args.amount_a_desired,
-        args.amount_b_desired,
-        args.amount_a_min,
-        args.amount_b_min,
-        args.to,
-        deadline,
-    );
+    let add_liquidity_call = increase_liquidity(&provider, router_addr, args, deadline);
 
-    let pending_tx: std::result::Result<_, _> = add_liquidity_call.send().await;
-
-    match pending_tx {
-        Ok(tx) => Ok(tx.watch().await?),
-        Err(e) => Err(e.into()),
-    }
+    Executor::new(&provider, add_liquidity_call).send().await
 }
 
-pub async fn remove_liquidity<P: Provider<Http<reqwest::Client>>>(
+pub fn remove_liquidity<P: Provider<Http<reqwest::Client>>>(
     provider: P,
     router_addr: Address,
     args: router02interface::DecreaseLiquidityArgs,
     deadline: U256,
-) -> Result<FixedBytes<32>> {
+) -> TransactionRequest {
     let router = create_uniswap_v2_router(&provider, router_addr);
 
-    let remove_liquidity_call = router.removeLiquidity(
-        args.token_a,
-        args.token_b,
-        args.liquidity,
-        args.amount_a_min,
-        args.amount_b_min,
-        args.to,
-        deadline,
-    );
-
-    let pending_tx: std::result::Result<_, _> = remove_liquidity_call.send().await;
-
-    match pending_tx {
-        Ok(tx) => Ok(tx.watch().await?),
-        Err(e) => Err(e.into()),
-    }
+    router
+        .removeLiquidity(
+            args.token_a,
+            args.token_b,
+            args.liquidity,
+            args.amount_a_min,
+            args.amount_b_min,
+            args.to,
+            deadline,
+        )
+        .into_transaction_request()
 }
 
 #[cfg(test)]
@@ -252,22 +250,33 @@ mod tests {
             .expect("GET_BLOCK_TIMESTAMP failed");
 
         // Make sure we do not hold any USDC
-        let balance = erc20::balance_of(&provider, token_b, client).await.unwrap();
+        let balance = Executor::new(&provider, erc20::balance_of(&provider, token_b, client))
+            .call_return_uint()
+            .await
+            .unwrap();
 
-        let receipt = swap_exact_ethfor_tokens(
+        let receipt = Executor::new(
             &provider,
-            router,
-            token_b,
-            U256::from(1e18 as u32),
-            amount_out_min,
-            client,
-            deadline,
+            swap_exact_ethfor_tokens(
+                &provider,
+                router,
+                token_b,
+                U256::from(1e18 as u32),
+                amount_out_min,
+                client,
+                deadline,
+            ),
         )
+        .send()
         .await;
 
         assert!(receipt.is_ok(), "SWAP_EXACT_ETH_FOR_TOKENS failed");
         assert!(
-            erc20::balance_of(&provider, token_b, client).await.unwrap() > balance + amount_out_min
+            Executor::new(&provider, erc20::balance_of(&provider, token_b, client))
+                .call_return_uint()
+                .await
+                .unwrap()
+                > balance + amount_out_min
         );
     }
 
@@ -289,15 +298,19 @@ mod tests {
 
         deadline -= U256::from(10);
 
-        let receipt = swap_exact_ethfor_tokens(
+        let receipt = Executor::new(
             &provider,
-            router,
-            token_b,
-            U256::from(1e18 as u32),
-            amount_out_min,
-            client,
-            deadline,
+            swap_exact_ethfor_tokens(
+                &provider,
+                router,
+                token_b,
+                U256::from(1e18 as u32),
+                amount_out_min,
+                client,
+                deadline,
+            ),
         )
+        .send()
         .await;
 
         assert!(receipt.is_err());
@@ -315,24 +328,36 @@ mod tests {
             .expect("GET_BLOCK_TIMESTAMP failed");
         let desired = U256::from(AMOUNT_DESIRED);
 
-        let _ = erc20::approve(&provider, token_b, router, U256::MAX)
-            .await
-            .unwrap();
-
-        let receipt = swap_eth_for_exact_tokens(
+        let _ = Executor::new(
             &provider,
-            router,
-            token_b,
-            desired,
-            U256::pow(U256::from(BASE), U256::from(MIN_ETH_DECIMALS)),
-            client,
-            deadline,
+            erc20::approve(&provider, token_b, router, U256::MAX),
         )
+        .send()
+        .await
+        .unwrap();
+
+        let receipt = Executor::new(
+            &provider,
+            swap_eth_for_exact_tokens(
+                &provider,
+                router,
+                token_b,
+                desired,
+                U256::pow(U256::from(BASE), U256::from(MIN_ETH_DECIMALS)),
+                client,
+                deadline,
+            ),
+        )
+        .send()
         .await;
 
         assert!(receipt.is_ok(), "SWAP_ETH_FOR_EXACT_TOKENS failed");
         assert!(
-            erc20::balance_of(&provider, token_b, client).await.unwrap() >= desired,
+            Executor::new(&provider, erc20::balance_of(&provider, token_b, client))
+                .call_return_uint()
+                .await
+                .unwrap()
+                >= desired,
             "TOKEN BALANCE is less than desired"
         );
     }
@@ -355,7 +380,10 @@ mod tests {
             .expect("GET_BLOCK_TIMESTAMP failed");
 
         assert_eq!(
-            erc20::balance_of(&provider, pair, client).await.unwrap(),
+            Executor::new(&provider, erc20::balance_of(&provider, pair, client))
+                .call_return_uint()
+                .await
+                .unwrap(),
             U256::ZERO
         );
 
@@ -370,11 +398,15 @@ mod tests {
         );
 
         // Deposit liquidity
-        let receipt = increase_liquidity(&provider, router, args, client, deadline).await;
+        let receipt = increase_liquidity_execute(&provider, router, args, client, deadline).await;
 
         assert!(receipt.is_ok(), "INCREASE_LIQUIDITY failed");
         assert!(
-            erc20::balance_of(&provider, pair, client).await.unwrap() > U256::ZERO,
+            Executor::new(&provider, erc20::balance_of(&provider, pair, client))
+                .call_return_uint()
+                .await
+                .unwrap()
+                > U256::ZERO,
             "LIQUIDITY BALANCE is zero"
         );
     }
@@ -406,7 +438,7 @@ mod tests {
         );
 
         // Deposit liquidity
-        let receipt = increase_liquidity(&provider, router, args, client, deadline).await;
+        let receipt = increase_liquidity_execute(&provider, router, args, client, deadline).await;
 
         println!("{:#?}", receipt);
 
@@ -415,14 +447,21 @@ mod tests {
         assert!(receipt.is_ok(), "INCREASE_LIQUIDITY failed");
 
         let pair = addresses::get_address(addresses::USDC_WBTC_PAIR);
-        let liquidity = erc20::balance_of(&provider, pair, client).await.unwrap();
+        let liquidity = Executor::new(&provider, erc20::balance_of(&provider, pair, client))
+            .call_return_uint()
+            .await
+            .unwrap();
 
         assert!(liquidity > U256::ZERO, "LIQUIDITY BALANCE is zero");
 
         // Approve liquidity
-        let _ = erc20::approve(&provider, pair, router, liquidity)
-            .await
-            .unwrap();
+        let _ = Executor::new(
+            &provider,
+            erc20::approve(&provider, pair, router, liquidity),
+        )
+        .send()
+        .await
+        .unwrap();
 
         let args = router02interface::DecreaseLiquidityArgs::new(
             usdc,
@@ -433,7 +472,12 @@ mod tests {
             client,
         );
 
-        let receipt = remove_liquidity(&provider, router, args, deadline).await;
+        let receipt = Executor::new(
+            &provider,
+            remove_liquidity(&provider, router, args, deadline),
+        )
+        .send()
+        .await;
 
         println!("{:?}", receipt);
         assert!(receipt.is_ok(), "DECREASE_LIQUIDITY failed");
