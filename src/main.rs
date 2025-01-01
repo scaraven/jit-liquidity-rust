@@ -5,28 +5,7 @@ use alloy::providers::{Provider, ProviderBuilder};
 
 use eyre::Result;
 
-#[path = "config.rs"]
-mod config;
-
-#[path = "uniswap/router02.rs"]
-mod router02;
-
-#[path = "interfaces/erc20.rs"]
-mod erc20;
-
-#[macro_use]
-#[path = "utils/utils.rs"]
-mod utils;
-
-#[path = "utils/setup.rs"]
-mod setup;
-
-#[path = "utils/addresses.rs"]
-mod addresses;
-
-#[cfg(test)]
-#[path = "testconfig.rs"]
-mod testconfig;
+use jit_liquidity_rust::{addresses, config, erc20, executor::Executor, pow, router02, utils};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -58,66 +37,106 @@ async fn main() -> Result<()> {
     let router_address = addresses::get_address(addresses::UNISWAP_V2_ROUTER);
 
     // Setup approvals for token0 and token1
-    let _receipt = erc20::approve(
+    let _receipt = Executor::new(
         &provider,
-        token0_address,
-        router_address,
-        U256::from(1e18 as u32),
+        erc20::approve(
+            &provider,
+            token0_address,
+            router_address,
+            U256::from(1e18 as u32),
+        ),
     )
+    .send()
     .await?;
-    let _receipt_two = erc20::approve(
+    let _receipt_two = Executor::new(
         &provider,
-        token1_address,
-        router_address,
-        U256::from(1e18 as u32),
+        erc20::approve(
+            &provider,
+            token1_address,
+            router_address,
+            U256::from(1e18 as u32),
+        ),
     )
+    .send()
     .await?;
 
     // Fetch token0 and token1 balances
-    let token0_balance = erc20::balance_of(&provider, token0_address, client).await?;
-    let token1_balance = erc20::balance_of(&provider, token1_address, client).await?;
+    let token0_balance = Executor::new(
+        &provider,
+        erc20::balance_of(&provider, token0_address, client),
+    )
+    .call_return_uint()
+    .await?;
+    let token1_balance = Executor::new(
+        &provider,
+        erc20::balance_of(&provider, token1_address, client),
+    )
+    .call_return_uint()
+    .await?;
 
     println!("Token0 balance: {:?}", token0_balance);
     println!("Token1 balance: {:?}", token1_balance);
 
     // Approve WETH to token0
     let weth_address = addresses::get_address(addresses::WETH);
-    erc20::approve(
+    Executor::new(
         &provider,
-        weth_address,
-        router_address,
-        pow!(BASE, DECIMALS),
+        erc20::approve(
+            &provider,
+            weth_address,
+            router_address,
+            pow!(BASE, DECIMALS),
+        ),
     )
+    .send()
     .await?;
 
     // Swap ETH for token0
     let amount_in = pow!(BASE, DECIMALS);
     let amount_out_min = U256::ZERO;
 
-    let _receipt_three = router02::swap_exact_ethfor_tokens(
+    let _receipt_three = Executor::new(
         &provider,
-        router_address,
-        token0_address,
-        amount_in,
-        amount_out_min,
-        client,
-        utils::get_block_timestamp_future(&provider, 60).await?,
+        router02::swap_exact_ethfor_tokens(
+            &provider,
+            router_address,
+            token0_address,
+            amount_in,
+            amount_out_min,
+            client,
+            utils::get_block_timestamp_future(&provider, 60).await?,
+        ),
     )
+    .send()
     .await?;
 
-    let _receipt_four = router02::swap_exact_ethfor_tokens(
+    let _receipt_four = Executor::new(
         &provider,
-        router_address,
-        token1_address,
-        amount_in,
-        amount_out_min,
-        client,
-        utils::get_block_timestamp_future(&provider, 60).await?,
+        router02::swap_exact_ethfor_tokens(
+            &provider,
+            router_address,
+            token1_address,
+            amount_in,
+            amount_out_min,
+            client,
+            utils::get_block_timestamp_future(&provider, 60).await?,
+        ),
     )
+    .send()
     .await?;
 
-    let token0_balance_after = erc20::balance_of(&provider, token0_address, client).await?;
-    let token1_balance_after = erc20::balance_of(&provider, token1_address, client).await?;
+    let token0_balance_after = Executor::new(
+        &provider,
+        erc20::balance_of(&provider, token0_address, client),
+    )
+    .call_return_uint()
+    .await?;
+    let token1_balance_after = Executor::new(
+        &provider,
+        erc20::balance_of(&provider, token1_address, client),
+    )
+    .call_return_uint()
+    .await?;
     println!("Token0 balance after swap: {:?}", token0_balance_after);
     println!("Token1 balance after swap: {:?}", token1_balance_after);
     Ok(())
