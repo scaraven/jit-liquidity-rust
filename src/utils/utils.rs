@@ -16,7 +16,16 @@ macro_rules! pow {
     () => {};
 }
 
-// Get block timestamp
+/// Get block timestamp in the future by adding a specified number of seconds.
+///
+/// # Arguments
+///
+/// * `provider` - A reference to the provider.
+/// * `seconds` - Number of seconds to add to the current block timestamp.
+///
+/// # Returns
+///
+/// * `Result<U256>` - The future block timestamp.
 pub async fn get_block_timestamp_future(
     provider: &impl Provider<Http<reqwest::Client>>,
     seconds: u64,
@@ -24,10 +33,10 @@ pub async fn get_block_timestamp_future(
     let block = provider
         .get_block_by_number(BlockNumberOrTag::Latest, BlockTransactionsKind::Hashes)
         .await
-        .expect("GET_BLOCK_BY_NUMBER failed");
+        .map_err(|e| eyre!("GET_BLOCK_BY_NUMBER failed: {:?}", e))?;
 
     block
-        .ok_or(eyre!("Block not found"))
+        .ok_or_else(|| eyre!("Block not found"))
         .map(|block| U256::from(block.header.timestamp + seconds))
 }
 

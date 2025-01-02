@@ -193,8 +193,8 @@ mod tests {
         let mut cache_db = init_cache_db(provider.clone(), BlockNumberOrTag::Latest.into());
 
         const VALUE: i32 = 150;
-        let bob = addresses::get_address("0x7E219AAf9339eA8f08c381632DEe3CeC94AA4054");
-        let weth = addresses::get_address(addresses::WETH);
+        let bob = addresses::get_address("0x7E219AAf9339eA8f08c381632DEe3CeC94AA4054").unwrap();
+        let weth = *addresses::WETH;
 
         const BALANCE_SLOT: u8 = 3;
         let storage_slot = utils::calculate_slot_mapping(
