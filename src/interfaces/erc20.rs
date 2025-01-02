@@ -93,17 +93,14 @@ mod tests {
 
     #[tokio::test]
     async fn check_balance_zero() {
-        let random_addr = addresses::get_address("0x8BB0080aC1006D407dfe84D29013964aCC1b9C00");
+        let random_addr =
+            addresses::get_address("0x8BB0080aC1006D407dfe84D29013964aCC1b9C00").unwrap();
 
         let (provider, _) = setup::test_setup().await;
 
         let balance_random = Executor::new(
             &provider,
-            balance_of(
-                &provider,
-                addresses::get_address(addresses::WETH),
-                random_addr,
-            ),
+            balance_of(&provider, *addresses::WETH, random_addr),
         )
         .call_return_uint()
         .await
@@ -114,18 +111,15 @@ mod tests {
 
     #[tokio::test]
     async fn check_balance_whale() {
-        let whale_addr = addresses::get_address("0xD6c32E35D6A169C77786430ac7b257fF6bb480C3");
+        let whale_addr =
+            addresses::get_address("0xD6c32E35D6A169C77786430ac7b257fF6bb480C3").unwrap();
         const EXPECTED: u64 = 236000000000000;
 
         let (provider, _) = setup::test_setup().await;
 
         let balance_whale = Executor::new(
             &provider,
-            balance_of(
-                &provider,
-                addresses::get_address(addresses::USDC_ADDR),
-                whale_addr,
-            ),
+            balance_of(&provider, *addresses::USDC_ADDR, whale_addr),
         )
         .call_return_uint()
         .await
@@ -135,19 +129,15 @@ mod tests {
 
     #[tokio::test]
     async fn check_approve() {
-        let whale_addr = addresses::get_address("0xD6c32E35D6A169C77786430ac7b257fF6bb480C3");
+        let whale_addr =
+            addresses::get_address("0xD6c32E35D6A169C77786430ac7b257fF6bb480C3").unwrap();
         let amount = U256::from(1e18 as u32);
 
         let (provider, address) = setup::test_setup().await;
 
         let approve = Executor::new(
             &provider,
-            approve(
-                &provider,
-                addresses::get_address(addresses::WETH),
-                whale_addr,
-                amount,
-            ),
+            approve(&provider, *addresses::WETH, whale_addr, amount),
         )
         .send()
         .await;
@@ -157,12 +147,7 @@ mod tests {
         // Ensure that allowance is now 1e18
         let allowance = Executor::new(
             &provider,
-            allowance(
-                &provider,
-                addresses::get_address(addresses::WETH),
-                address,
-                whale_addr,
-            ),
+            allowance(&provider, *addresses::WETH, address, whale_addr),
         )
         .call_return_uint()
         .await
