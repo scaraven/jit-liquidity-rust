@@ -1,9 +1,13 @@
 use alloy::{
+    network::Network,
     primitives::{Address, U256},
     providers::Provider,
     rpc::types::TransactionRequest,
     sol,
-    transports::http::{reqwest, Http},
+    transports::{
+        http::{reqwest, Http},
+        Transport,
+    },
 };
 
 use IERC20Token::IERC20TokenInstance;
@@ -15,14 +19,26 @@ sol!(
     "contracts/src/IERC20Token.sol"
 );
 
-fn create_erc20_token<P: Provider<Http<reqwest::Client>>>(
+fn create_erc20_token<P: Provider<T, N>, T: Transport + Clone, N: Network>(
     provider: P,
     address: Address,
-) -> IERC20TokenInstance<Http<reqwest::Client>, P> {
+) -> IERC20TokenInstance<T, P, N> {
     IERC20Token::new(address, provider)
 }
 
-// Check that approval is over a limit
+/// Check if the approval limit is met.
+///
+/// # Arguments
+///
+/// * `provider` - A reference to the provider.
+/// * `token_addr` - The token address.
+/// * `owner` - The owner address.
+/// * `spender` - The spender address.
+/// * `desired` - The desired approval amount.
+///
+/// # Returns
+///
+/// * `bool` - Whether the approval limit is met.
 pub async fn check_approval_limit<P: Provider<Http<reqwest::Client>>>(
     provider: &P,
     token_addr: Address,
@@ -34,7 +50,7 @@ pub async fn check_approval_limit<P: Provider<Http<reqwest::Client>>>(
     let allowance = Executor::new(provider, allowance_tx)
         .call_return_uint()
         .await
-        .expect("ALLOWANCE failed");
+        .unwrap_or(U256::ZERO);
 
     allowance >= desired
 }

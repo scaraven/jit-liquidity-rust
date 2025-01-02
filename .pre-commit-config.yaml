@@ -7,7 +7,6 @@ repos:
       - id: cargo-check
         types: [file, rust]
 
-
   - repo: local
     hooks:
       - id: rust-clippy
@@ -44,7 +43,6 @@ repos:
         types: [file]
         language: system
         files: ^contracts/.*\.sol$
-
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
