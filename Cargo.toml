@@ -10,3 +10,4 @@ dotenv = "0.15.0"
 alloy = { version = "0.7.3", features = ["full", "node-bindings", "rpc-types-trace", "rpc-types-debug"] }
 futures-util = "0.3"
 revm = { version = "19.0.0", features = ["alloydb"] }
+foldhash = "0.1.4"
