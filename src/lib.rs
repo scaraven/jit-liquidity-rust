@@ -23,6 +23,9 @@ pub mod addresses;
 #[path = "watcher/subscribe.rs"]
 pub mod subscribe;
 
+#[path = "watcher/subscribe_filter.rs"]
+mod subscribe_filter;
+
 #[path = "simulation/engine.rs"]
 pub mod engine;
 
