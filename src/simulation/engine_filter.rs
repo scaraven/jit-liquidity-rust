@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use revm::primitives::{Address, ExecutionResult, ResultAndState};
 
 trait EngineFilter {

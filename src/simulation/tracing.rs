@@ -11,6 +11,17 @@ use revm::{
     DatabaseCommit, Evm,
 };
 
+/// Internal function to execute a transaction with revm.
+///
+/// # Arguments
+///
+/// * `cache_db` - The cache database.
+/// * `desired_tx` - The desired transaction.
+/// * `commit` - Whether to commit the changes to the database.
+///
+/// # Returns
+///
+/// * `Result<ResultAndState>` - The result and state of the execution.
 fn revm_call_internal<T, N, P>(
     cache_db: &mut CacheDB<AlloyDB<T, N, Arc<P>>>,
     desired_tx: TransactionRequest,
@@ -35,7 +46,9 @@ where
         .build();
 
     // Execute the transaction and view results
-    let ref_tx = evm.transact().unwrap();
+    let ref_tx = evm
+        .transact()
+        .map_err(|e| eyre::eyre!("Transaction failed: {:?}", e))?;
     let result = ref_tx.result.clone();
 
     let ret = match result {
@@ -44,7 +57,7 @@ where
             ..
         } => ref_tx,
         result => {
-            return Err(eyre::eyre!("execution failed: {result:?}"));
+            return Err(eyre::eyre!("Execution failed: {:?}", result));
         }
     };
 

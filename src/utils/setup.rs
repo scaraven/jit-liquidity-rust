@@ -13,24 +13,50 @@ use alloy::{
 };
 
 use crate::testconfig;
+use eyre::Result;
 
-pub async fn setup_provider_with_anvil(rpc_url: Option<Url>) -> impl Provider<BoxTransport> {
+/// Setup a provider with an Anvil instance.
+///
+/// # Arguments
+///
+/// * `rpc_url` - Optional URL for RPC.
+///
+/// # Returns
+///
+/// * `Result<impl Provider<BoxTransport>>` - The provider.
+pub async fn setup_provider_with_anvil(
+    rpc_url: Option<Url>,
+) -> Result<impl Provider<BoxTransport>> {
     let builder = ProviderBuilder::default().with_recommended_fillers();
 
-    match rpc_url {
+    let provider = match rpc_url {
         Some(url) => builder.on_anvil_with_wallet_and_config(|anvil| anvil.fork(url)),
         None => builder.on_anvil_with_wallet(),
-    }
+    };
+
+    Ok(provider)
 }
 
+/// Setup a provider with a specified endpoint and private key.
+///
+/// # Arguments
+///
+/// * `endpoint` - The endpoint URL.
+/// * `priv_key` - The private key signer.
+///
+/// # Returns
+///
+/// * `Result<impl Provider<Http<reqwest::Client>>>` - The provider.
 pub async fn setup_provider(
     endpoint: Url,
     priv_key: PrivateKeySigner,
-) -> impl Provider<Http<reqwest::Client>> {
+) -> Result<impl Provider<Http<reqwest::Client>>> {
     println!("Connecting to Ethereum node at: {}", endpoint);
 
     let wallet = EthereumWallet::from(priv_key);
-    ProviderBuilder::default().wallet(wallet).on_http(endpoint)
+    let provider = ProviderBuilder::default().wallet(wallet).on_http(endpoint);
+
+    Ok(provider)
 }
 
 // Given a spun up Anvil instance, return a provider
