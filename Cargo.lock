@@ -1984,6 +1984,7 @@ dependencies = [
  "alloy",
  "dotenv",
  "eyre",
+ "foldhash",
  "futures-util",
  "revm",
  "tokio",

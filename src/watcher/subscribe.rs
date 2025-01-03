@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
+use crate::subscribe_filter::ShallowFilter;
 use alloy::{
-    consensus::TxType,
-    primitives::{Address, TxKind},
     providers::{Provider, ProviderBuilder, WsConnect},
     pubsub::PubSubFrontend,
     rpc::types::Transaction,
@@ -11,40 +10,14 @@ use eyre::Result;
 use futures_util::StreamExt;
 use tokio::{sync::Mutex, task::JoinHandle};
 
-#[derive(Clone, Debug)]
-pub enum ShallowFilterType {
-    Recipient(Address),
-    None,
-}
-
-fn filter_by_addr(tx: &Transaction, expected: Address) -> bool {
-    match tx.inner.tx_type() {
-        TxType::Eip1559 => {
-            let tx = tx.inner.as_eip1559().unwrap();
-            let to = tx.clone().strip_signature().to;
-            match to {
-                TxKind::Call(addr) => addr == expected,
-                TxKind::Create => false,
-            }
-        }
-        _ => false,
-    }
-}
-
-fn filter(tx: &Transaction, filter_type: ShallowFilterType) -> bool {
-    match filter_type {
-        ShallowFilterType::Recipient(addr) => filter_by_addr(tx, addr),
-        ShallowFilterType::None => true,
-    }
-}
-
-pub async fn subscribe_to_pending<P>(
+pub async fn subscribe_to_pending<P, T>(
     provider: Arc<P>,
-    filter_type: ShallowFilterType,
+    filter_type: T,
     tx_buffer: Arc<Mutex<Vec<Transaction>>>,
 ) -> Result<JoinHandle<()>>
 where
     P: Provider<PubSubFrontend> + Send + Sync + 'static,
+    T: ShallowFilter + Clone + Send + Sync + 'static,
 {
     let sub = provider.subscribe_pending_transactions().await.unwrap();
 
@@ -58,7 +31,7 @@ where
             async move {
                 match provider.get_transaction_by_hash(tx_hash).await {
                     Ok(tx) => tx.and_then(|tx| {
-                        if filter(&tx, filter_type) {
+                        if filter_type.filter(&tx) {
                             Some(tx)
                         } else {
                             None
@@ -100,8 +73,9 @@ pub async fn create_ws_provider(rpc_url: &str) -> Result<impl Provider<PubSubFro
 mod tests {
 
     use alloy::{network::TransactionBuilder, primitives::U256, rpc::types::TransactionRequest};
+    use subscribe_filter::ShallowFilterType;
 
-    use crate::{setup, testconfig};
+    use crate::{setup, subscribe_filter, testconfig};
 
     use super::*;
     use std::sync::Arc;

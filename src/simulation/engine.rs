@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::{marker::PhantomData, sync::Arc};
 
 use alloy::{
@@ -53,5 +51,64 @@ where
             results.push(result);
         }
         results
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use revm::primitives::{TxKind, U256};
+
+    use crate::{addresses, setup};
+
+    use super::*;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    pub async fn test_engine_task() {
+        let (provider, client) = setup::test_setup().await;
+        let provider = Arc::new(provider);
+
+        let alice = addresses::get_address("0x390e206254c9777C01d017B22eBDC7E2959fE3E8").unwrap();
+        const VALUE: i32 = 100;
+
+        // Send 200 wei to alice and then 100 wei back
+        let bundle = vec![
+            TransactionRequest {
+                from: Some(client),
+                to: Some(TxKind::Call(alice)),
+                value: Some(U256::from(2 * VALUE)),
+                ..Default::default()
+            },
+            TransactionRequest {
+                from: Some(alice),
+                to: Some(TxKind::Call(client)),
+                value: Some(U256::from(VALUE)),
+                ..Default::default()
+            },
+        ];
+
+        let task = EngineTask::new(provider, bundle);
+        let results = task.consume();
+
+        assert_eq!(results.len(), 2);
+        for result in &results {
+            assert!(result.is_ok());
+        }
+
+        // Check that the state changes are as expected
+        let res1 = results[0].as_ref().unwrap();
+        assert!(res1.state.contains_key(&alice));
+        assert!(res1.state.contains_key(&client));
+        assert_eq!(
+            res1.state.get(&alice).unwrap().info.balance,
+            U256::from(2 * VALUE)
+        );
+
+        let res2 = results[1].as_ref().unwrap();
+        assert!(res2.state.contains_key(&alice));
+        assert!(res2.state.contains_key(&client));
+        assert_eq!(
+            res2.state.get(&alice).unwrap().info.balance,
+            U256::from(VALUE)
+        );
     }
 }
