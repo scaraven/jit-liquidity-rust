@@ -16,7 +16,7 @@ use crate::executor::Executor;
 
 sol!(
     #[sol(rpc)]
-    "contracts/src/IERC20Token.sol"
+    "contracts/src/interfaces/IERC20Token.sol"
 );
 
 fn create_erc20_token<P: Provider<T, N>, T: Transport + Clone, N: Network>(

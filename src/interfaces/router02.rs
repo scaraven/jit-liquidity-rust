@@ -18,12 +18,12 @@ const BASE: u64 = 10;
 
 sol!(
     #[sol(rpc)]
-    "contracts/src/IUniswapV2Router.sol"
+    "contracts/src/interfaces/IUniswapV2Router.sol"
 );
 
 sol!(
     #[sol(rpc)]
-    "contracts/src/IUniswapV2Pair.sol"
+    "contracts/src/interfaces/IUniswapV2Pair.sol"
 );
 
 fn create_uniswap_v2_router<P: Provider<Http<reqwest::Client>>>(
