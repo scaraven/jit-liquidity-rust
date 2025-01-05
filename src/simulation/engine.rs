@@ -3,7 +3,7 @@ use std::{marker::PhantomData, sync::Arc};
 use alloy::{
     eips::BlockNumberOrTag,
     network::{Ethereum, Network},
-    providers::{ext::DebugApi, Provider},
+    providers::Provider,
     rpc::types::TransactionRequest,
     transports::{BoxTransport, Transport},
 };
@@ -18,7 +18,7 @@ pub type EngineResultBundle = Vec<Result<ResultAndState>>;
 
 struct EngineTask<P, T = BoxTransport, N = Ethereum>
 where
-    P: Provider<T, N> + DebugApi<N, T>,
+    P: Provider<T, N>,
     T: Transport + Clone,
     N: Network,
 {
@@ -30,7 +30,7 @@ where
 
 impl<P, T, N> EngineTask<P, T, N>
 where
-    P: Provider<T, N> + DebugApi<N, T>,
+    P: Provider<T, N>,
     T: Transport + Clone,
     N: Network,
 {

@@ -9,6 +9,12 @@ pub static UNISWAP_V2_ROUTER: LazyLock<Address> = LazyLock::new(|| {
         .parse()
         .unwrap()
 });
+pub static UNISWAP_V3_ROUTER: LazyLock<Address> = LazyLock::new(|| {
+    "0xe592427a0aece92de3edee1f18e0157c05861564"
+        .parse()
+        .unwrap()
+});
+
 pub static WETH: LazyLock<Address> = LazyLock::new(|| {
     "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
         .parse()
