@@ -43,3 +43,6 @@ mod jit_bundler;
 
 #[path = "flashbots_share/extraction.rs"]
 mod extraction;
+
+#[path = "flashbots_share/bundler.rs"]
+mod bundler;
