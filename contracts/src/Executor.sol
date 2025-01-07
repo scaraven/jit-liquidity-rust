@@ -92,7 +92,7 @@ contract Executor is IExecutor, Ownable {
         }
     }
 
-    function calc_metrics(address pool) internal view returns (MetricParams memory) {
+    function calc_metrics(address pool) public view returns (MetricParams memory) {
         // Fetch pool
         IUniswapV3Pool pool_contract = IUniswapV3Pool(pool);
         address token0 = pool_contract.token0();
