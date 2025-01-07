@@ -6,6 +6,8 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IOracle} from "./interfaces/IOracle.sol";
 import {IERC20Token} from "./interfaces/IERC20Token.sol";
 
+error BenchmarkNotStarted();
+
 contract FundManager is IFundManager, Ownable {
     IOracle public oracle;
 
@@ -18,18 +20,18 @@ contract FundManager is IFundManager, Ownable {
     }
 
     function end_benchmark(address client, address[] calldata tokens) external view override onlyOwner returns (bool) {
-        require(usd_value != 0, "FUNDMANAGER: Benchmark not started");
+        require(usd_value != 0, BenchmarkNotStarted());
         uint256 current_usd_value = calculate_usd_value(client, tokens);
 
         // Ensure that our portfolio has not decreased
         return current_usd_value > usd_value;
     }
 
-    function setOracle(IOracle _oracle) external onlyOwner {
-        oracle = _oracle;
+    function set_oracle(address _oracle) external override onlyOwner {
+        oracle = IOracle(_oracle);
     }
 
-    function calculate_usd_value(address client, address[] calldata tokens) internal view returns (uint256) {
+    function calculate_usd_value(address client, address[] calldata tokens) public view returns (uint256) {
         // Loop through all the tokens and calcualte the total USD value
         uint256 total_usd_value = 0;
 
