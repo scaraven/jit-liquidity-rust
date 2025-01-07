@@ -7,8 +7,7 @@ edition = "2021"
 tokio = { version = "1", features = ["full"] }
 eyre = "0.6"
 dotenv = "0.15.0"
-alloy = { version = "0.7.3", features = ["full", "node-bindings", "rpc-types-trace", "rpc-types-debug"] }
-alloy-mev = "0.5"
+alloy = { version = "0.7.3", features = ["full", "node-bindings", "rpc-types-trace", "rpc-types-debug", "rpc-types-mev"] }
 futures-util = "0.3"
 revm = { version = "19.0.0", features = ["alloydb"] }
 foldhash = "0.1.4"

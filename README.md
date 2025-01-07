@@ -1,6 +1,12 @@
 ### JIT-Liqudity-Rust
 A rust bot using Alloy-rs, Revm, and Alloy-mev in order to provider just-in-time (JIT) liquidity on UniswapV3.
 
+### Setup
+To run the bot, you require cargo which can be installed from the Rust's official website [here](https://www.rust-lang.org/tools/install). Additionally, the solidity contracts use forge and anvil which can be installed via foundryup found [here](https://book.getfoundry.sh/getting-started/installation). Additionally, you need to create a .env file which contains the following keys:
+
+PRIVATE_KEY, INFURA_URL, ANVIL_ENDPOINT
+
+
 ### TODO
 1. Expand filter by simulating transaction with REVM to figure out whether we have an internal call to the UniswapV3 router (logs?)
     - This can be used to catch value provided by protocols which deploy DEFI strategies on-chain

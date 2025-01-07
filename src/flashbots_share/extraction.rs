@@ -1,12 +1,6 @@
-use alloy::{
-    hex::FromHex,
-    primitives::{Address, Bytes, TxKind, U256},
-    rpc::types::TransactionRequest,
-    sol,
-    sol_types::SolEvent,
-};
-use eyre::{eyre, OptionExt, Result};
-use revm::primitives::{ExecutionResult, Log, ResultAndState};
+use alloy::{primitives::Address, sol, sol_types::SolEvent};
+use eyre::Result;
+use revm::primitives::{ExecutionResult, Log};
 
 sol! {
     #[sol(rpc)]
@@ -20,13 +14,8 @@ sol! {
     int24 tick);
 }
 
-struct UniswapV3SwapInfo {
-    sender: Address,
-    token0: Address,
-    token1: Address,
-    token0_amount: U256,
-    token1_amount: U256,
-    fee: U256,
+pub struct UniswapV3SwapInfo {
+    pub pool: Address,
 }
 
 /// Extract key information from UniswapV3 logs.
@@ -38,7 +27,7 @@ struct UniswapV3SwapInfo {
 /// # Returns
 ///
 /// * `Vec<Log<Swap>` - The resulting swap logs.
-pub fn decode_uniswapv3_logs(tx: ExecutionResult) -> Vec<Log<Swap>> {
+fn decode_uniswapv3_logs(tx: ExecutionResult) -> Vec<Log<Swap>> {
     // Assert that we are using Uniswap V3 with the corret function signatures
     let result = tx.into_logs();
 
@@ -46,4 +35,19 @@ pub fn decode_uniswapv3_logs(tx: ExecutionResult) -> Vec<Log<Swap>> {
         .into_iter()
         .filter_map(|res| Swap::decode_log(&res, true).ok())
         .collect()
+}
+
+pub fn extract(tx: ExecutionResult) -> Vec<UniswapV3SwapInfo> {
+    let logs = decode_uniswapv3_logs(tx);
+
+    logs.into_iter()
+        .map(extract_uniswapv3_info)
+        .collect::<Result<Vec<UniswapV3SwapInfo>>>()
+        .unwrap()
+}
+
+fn extract_uniswapv3_info(log: Log<Swap>) -> Result<UniswapV3SwapInfo> {
+    let pool = log.address;
+
+    Ok(UniswapV3SwapInfo { pool })
 }

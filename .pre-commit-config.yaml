@@ -4,8 +4,10 @@ repos:
     hooks:
       - id: fmt
         types: [file, rust]
+        files: ^src/.*\.rs$
       - id: cargo-check
         types: [file, rust]
+        files: ^src/.*\.rs$
 
   - repo: local
     hooks:

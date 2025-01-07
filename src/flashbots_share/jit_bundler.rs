@@ -1,14 +1,27 @@
-use std::{marker::PhantomData, sync::Arc};
+use std::sync::Arc;
 
 use alloy::{
     network::{Ethereum, Network},
     providers::Provider,
     rpc::types::TransactionRequest,
+    sol,
     transports::{BoxTransport, Transport},
 };
 
+use eyre::Result;
+
+use IExecutor::IExecutorInstance;
+
+use crate::{engine::EngineTask, extraction};
+
+sol!(
+    #[sol(rpc)]
+    "contracts/src/interfaces/IExecutor.sol"
+);
+
 trait FlashBotBundler {
     fn execute(self);
+    fn simulate(&self);
 }
 
 struct UniswapV3LiquidityBundler<
@@ -16,24 +29,48 @@ struct UniswapV3LiquidityBundler<
     T: Clone + Transport = BoxTransport,
     N: Network = Ethereum,
 > {
-    flashbot_provider: Arc<P>,
+    executor: IExecutorInstance<T, P, N>,
     sandwich_transaction: TransactionRequest,
-    _marker: PhantomData<(T, N)>,
 }
 
 impl<P, T, N> UniswapV3LiquidityBundler<P, T, N>
 where
     P: Provider<T, N>,
     T: Transport + Clone,
-    N: Network,
+    N: Network<TransactionRequest = TransactionRequest>,
 {
-    pub fn new(flashbot_provider: Arc<P>, sandwich_transaction: TransactionRequest) -> Self {
+    pub fn new(
+        executor: IExecutorInstance<T, P, N>,
+        sandwich_transaction: TransactionRequest,
+    ) -> Self {
         Self {
-            flashbot_provider,
+            executor,
             sandwich_transaction,
-            _marker: PhantomData,
         }
     }
 
-    pub fn execute(self) {}
+    pub async fn build(self, provider: Arc<P>) -> Result<(TransactionRequest, TransactionRequest)> {
+        // Extract pool address
+        // Create an engine task and execute
+        let task = EngineTask::new(provider, vec![self.sandwich_transaction.clone()]);
+        let result = task.consume();
+
+        // Extract ResultAndState and assert we have no errors
+        let result = result
+            .first()
+            .ok_or_else(|| eyre::eyre!("No result found"))?;
+        let logs = extraction::extract(result.as_ref().unwrap().result.clone());
+
+        // For now assert that we only have one Swap log
+        // TODO: Handle multiple logs
+        if logs.len() != 1 {
+            return Err(eyre::eyre!("Expected 1 log, got {}", logs.len()));
+        }
+
+        let log = logs.first().ok_or_else(|| eyre::eyre!("No log found"))?;
+        let frontrun = self.executor.execute(log.pool).into_transaction_request();
+        let backrun = self.executor.finish().into_transaction_request();
+
+        Ok((frontrun, backrun))
+    }
 }

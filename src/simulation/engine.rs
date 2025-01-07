@@ -16,7 +16,7 @@ use crate::tracing;
 type TransactionBundle = Vec<TransactionRequest>;
 pub type EngineResultBundle = Vec<Result<ResultAndState>>;
 
-struct EngineTask<P, T = BoxTransport, N = Ethereum>
+pub struct EngineTask<P, T = BoxTransport, N = Ethereum>
 where
     P: Provider<T, N>,
     T: Transport + Clone,

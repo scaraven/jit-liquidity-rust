@@ -41,5 +41,5 @@ pub mod testconfig;
 #[path = "flashbots_share/jit_bundler.rs"]
 mod jit_bundler;
 
-#[path = "flashbots_share/uniswapv3_extraction.rs"]
-mod uniswapv3_extraction;
+#[path = "flashbots_share/extraction.rs"]
+mod extraction;
