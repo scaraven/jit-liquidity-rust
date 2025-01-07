@@ -23,6 +23,11 @@ contract Whitelist is Ownable {
         return true;
     }
 
+    function remove_whitelist(address pool) external onlyOwner returns (bool) {
+        delete whitelist[pool];
+        return true;
+    }
+
     function get_whitelist(address pool) external view returns (address, address) {
         return (whitelist[pool].token0, whitelist[pool].token1);
     }

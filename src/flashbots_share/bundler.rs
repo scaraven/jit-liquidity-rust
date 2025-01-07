@@ -20,7 +20,7 @@ pub async fn create_bundle<T: Transaction>(
     let signed_front = frontrun.build(&wallet).await?.input().clone();
     let signed_back = backrun.build(&wallet).await?.input().clone();
 
-    // Receive the sandwich transaction hash and convert into bytes
+    // Receive the sandwich transaction and convert into bytes
     let sandwich_hash = sandwich.input().clone();
 
     // Create Bundle Items
