@@ -21,10 +21,6 @@ contract ExecutorTest is Test {
     address constant USDC_WHALE = address(0x37305B1cD40574E4C5Ce33f8e8306Be057fD7341);
 
     function setUp() public {
-        // Fork chain
-        uint256 forkId = vm.createFork(vm.envString("INFURA_URL"), vm.envUint("INFURA_URL_BLOCK"));
-        vm.selectFork(forkId);
-
         // Initialize the Whitelist contract
         whitelist = new Whitelist(address(this));
         fundManager = IFundManager(address(this));
