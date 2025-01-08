@@ -47,7 +47,7 @@ jobs:
 
       - name: Run Forge tests
         run: |
-          forge test -vvv
+          forge test -vvvv
         id: test
         env:
           INFURA_URL: ${{ secrets.INFURA_URL }}
