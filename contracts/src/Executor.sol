@@ -29,7 +29,8 @@ struct MetricParams {
     uint256 amount0;
     uint256 amount1;
     uint24 fee;
-    int24 tick;
+    int24 tickLower;
+    int24 tickUpper;
 }
 
 // Is a proxy contract that allows the owner to execute sandwich trades
@@ -40,7 +41,7 @@ contract Executor is IExecutor, Ownable {
     Whitelist public whitelist;
     INonfungiblePositionManager public manager;
 
-    mapping(address => mapping(int24 => uint256)) tokenIds;
+    mapping(address => mapping(int24 => mapping(int24 => uint256))) tokenIds;
 
     uint256 private execution_bit;
     Position private position;
@@ -78,16 +79,23 @@ contract Executor is IExecutor, Ownable {
         fundManager.start_benchmark(address(this), tokens);
 
         // If we already have a tokenId for this pool, increase liquidity
-        uint256 tokenIdPossible = tokenIds[pool][metrics.tick];
+        uint256 tokenIdPossible = tokenIds[pool][metrics.tickLower][metrics.tickUpper];
         if (tokenIdPossible != 0) {
             (uint128 liquidity, uint256 amount0In, uint256 amount1In) =
                 increase(tokenIdPossible, metrics.amount0, metrics.amount1);
             position = Position(tokenIdPossible, liquidity, amount0In, amount1In, metrics.token0, metrics.token1);
         } else {
             // Otherwise, mint a new position
-            (uint256 tokenId, uint128 liquidity, uint256 amount0In, uint256 amount1In) =
-                mint(metrics.token0, metrics.token1, metrics.amount0, metrics.amount1, metrics.tick, metrics.fee);
-            tokenIds[pool][metrics.tick] = tokenId;
+            (uint256 tokenId, uint128 liquidity, uint256 amount0In, uint256 amount1In) = mint(
+                metrics.token0,
+                metrics.token1,
+                metrics.amount0,
+                metrics.amount1,
+                metrics.tickLower,
+                metrics.tickUpper,
+                metrics.fee
+            );
+            tokenIds[pool][metrics.tickLower][metrics.tickUpper] = tokenId;
             position = Position(tokenId, liquidity, amount0In, amount1In, metrics.token0, metrics.token1);
         }
     }
@@ -103,43 +111,60 @@ contract Executor is IExecutor, Ownable {
         uint256 amount1Max = IERC20Token(token1).balanceOf(address(this));
 
         uint24 fee = pool_contract.fee();
-        (uint160 sqrtPriceX96, int24 tick,,,,,) = pool_contract.slot0();
+        int24 tickLower;
+        int24 tickUpper;
+        uint160 sqrtPriceX96;
+        {
+            int24 tick;
+            (sqrtPriceX96, tick,,,,,) = pool_contract.slot0();
 
-        // Calculate correct ratios
-        uint256 amount1Desired = FullMath.mulDiv(amount0Max, FixedPoint96.RESOLUTION, sqrtPriceX96);
-        uint256 amount0Desired = FullMath.mulDiv(amount1Max, sqrtPriceX96, FixedPoint96.RESOLUTION);
+            // Get the pool contract spacing
+            int24 spacing = pool_contract.tickSpacing();
 
-        uint256 amount0;
-        uint256 amount1;
-
-        // We do not have enough of token1 to put all of token0 in
-        if (amount1Desired >= amount1Max) {
-            amount1 = amount1Max;
-            amount0 = amount0Desired;
-        } else {
-            amount1 = amount1Desired;
-            amount0 = amount0Max;
+            (tickLower, tickUpper) = calculate_tick_bounds(tick, spacing);
         }
 
-        MetricParams memory metrics = MetricParams(token0, token1, amount0, amount1, fee, tick);
+        MetricParams memory metrics = MetricParams(token0, token1, amount0Max, amount1Max, fee, tickLower, tickUpper);
         return metrics;
     }
 
-    function mint(address token0, address token1, uint256 amount0, uint256 amount1, int24 tick, uint24 fee)
+    function calculate_tick_bounds(int24 tick, int24 spacing)
         internal
-        returns (uint256 tokenId, uint128 liquidity, uint256 amount0In, uint256 amount1In)
+        pure
+        returns (int24 tickLower, int24 tickUpper)
     {
+        // Calculate lower and upper ticks
+        // If tick is not on a boundary, then choose upper and lower bound
+        int24 remain = tick % spacing;
+        if (remain == 0) {
+            tickLower = tick - spacing;
+            tickUpper = tick + spacing;
+        } else {
+            tickLower = tick - remain;
+            tickUpper = tick + (spacing - remain);
+        }
+    }
+
+    function mint(
+        address token0,
+        address token1,
+        uint256 amount0,
+        uint256 amount1,
+        int24 tickLower,
+        int24 tickUpper,
+        uint24 fee
+    ) internal returns (uint256 tokenId, uint128 liquidity, uint256 amount0In, uint256 amount1In) {
         // Supply liquidity to UniswapV3 pool
         INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager.MintParams({
             token0: token0,
             token1: token1,
             fee: fee,
-            tickLower: tick,
-            tickUpper: tick,
+            tickLower: tickLower,
+            tickUpper: tickUpper,
             amount0Desired: amount0,
             amount1Desired: amount1,
-            amount0Min: amount0,
-            amount1Min: amount1,
+            amount0Min: 0,
+            amount1Min: 0,
             recipient: address(this),
             deadline: block.timestamp
         });
@@ -156,8 +181,8 @@ contract Executor is IExecutor, Ownable {
             tokenId: tokenId,
             amount0Desired: amount0,
             amount1Desired: amount1,
-            amount0Min: amount0,
-            amount1Min: amount1,
+            amount0Min: 0,
+            amount1Min: 0,
             deadline: block.timestamp
         });
 
