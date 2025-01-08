@@ -40,7 +40,7 @@ repos:
       - id: forge-test
         name: Forge test
         description: Run forge test on files included in the commit. forge should be installed before-hand.
-        entry: bash -c 'cd contracts && forge test -vvv --fork-url $INFURA_URL --fork-block-number $INFURA_URL_BLOCK'
+        entry: bash -c 'cd contracts && forge test -vvv'
         pass_filenames: false
         types: [file]
         language: system
