@@ -44,6 +44,7 @@ where
                 }
             }
         })
+        // TODO! Remove this take(1) and implement a proper shutdown mechanism
         .take(1);
     println!("Awaiting pending transactions...");
 

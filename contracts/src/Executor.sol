@@ -4,51 +4,47 @@ pragma abicoder v2;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Whitelist} from "@core/Whitelist.sol";
-import {INonfungiblePositionManager} from "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {IERC20Token} from "@interfaces/IERC20Token.sol";
 import {IFundManager} from "@interfaces/IFundManager.sol";
 import {IExecutor} from "@interfaces/IExecutor.sol";
 
-import {FullMath} from "@uniswap/v3-core/contracts/libraries/FullMath.sol";
-import {FixedPoint96} from "@uniswap/v3-core/contracts/libraries/FixedPoint96.sol";
-import {SafeCast} from "@uniswap/v3-core/contracts/libraries/SafeCast.sol";
+import {LiquidityAmounts} from "@uniswap/v3-periphery/contracts/libraries/LiquidityAmounts.sol";
+import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 
-struct Position {
-    uint256 tokenId;
-    uint128 liquidity;
-    uint256 amount0;
-    uint256 amount1;
-    address token0;
-    address token1;
-}
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-struct MetricParams {
-    address token0;
-    address token1;
-    uint256 amount0;
-    uint256 amount1;
-    uint24 fee;
-    int24 tickLower;
-    int24 tickUpper;
-}
-
-// Is a proxy contract that allows the owner to execute sandwich trades
 contract Executor is IExecutor, Ownable {
-    using SafeCast for uint256;
+    using SafeERC20 for IERC20;
+
+    struct MetricParams {
+        address pool;
+        address token0;
+        address token1;
+        uint24 fee;
+        int24 tick;
+        int24 tickLower;
+        int24 tickUpper;
+        uint128 liquidity;
+    }
+
+    error UnauthorizedPool(address expected, address actual);
 
     IFundManager public fundManager;
     Whitelist public whitelist;
-    INonfungiblePositionManager public manager;
-
-    mapping(address => mapping(int24 => mapping(int24 => uint256))) tokenIds;
 
     uint256 private execution_bit;
-    Position private position;
+    MetricParams public metrics;
 
     modifier notExecuting() {
         require(execution_bit == 0, "EXECUTOR: Currently executing");
         execution_bit = 1;
+        _;
+    }
+
+    modifier isExecuting() {
+        require(execution_bit == 1, "EXECUTOR: Not executing");
         _;
     }
 
@@ -58,49 +54,47 @@ contract Executor is IExecutor, Ownable {
         _;
     }
 
-    constructor(address _owner, address _fundManager, address _whitelist, address _manager) Ownable(_owner) {
+    constructor(address _owner, address _fundManager, address _whitelist) Ownable(_owner) {
         fundManager = IFundManager(_fundManager);
         whitelist = Whitelist(_whitelist);
-        manager = INonfungiblePositionManager(_manager);
     }
 
     function execute(address pool) external override notExecuting onlyOwner {
-        require(whitelist.check_whitelist(pool), "EXECUTOR: Pool not whitelisted");
+        require(whitelist.checkWhitelist(pool), "EXECUTOR: Pool not whitelisted");
 
         // Calculate metrics
-        MetricParams memory metrics = calc_metrics(pool);
+        MetricParams memory _metrics = calcMetrics(pool);
+        // Write to storage
+        metrics = _metrics;
 
         // Create array of tokens
-        address[] memory tokens = new address[](2);
-        tokens[0] = metrics.token0;
-        tokens[1] = metrics.token1;
+        address[] memory tokens = new address[](3);
+        tokens[0] = _metrics.token0;
+        tokens[1] = _metrics.token1;
 
         // Start benchmark
-        fundManager.start_benchmark(address(this), tokens);
+        fundManager.startBenchmark(address(this), tokens);
 
-        // If we already have a tokenId for this pool, increase liquidity
-        uint256 tokenIdPossible = tokenIds[pool][metrics.tickLower][metrics.tickUpper];
-        if (tokenIdPossible != 0) {
-            (uint128 liquidity, uint256 amount0In, uint256 amount1In) =
-                increase(tokenIdPossible, metrics.amount0, metrics.amount1);
-            position = Position(tokenIdPossible, liquidity, amount0In, amount1In, metrics.token0, metrics.token1);
-        } else {
-            // Otherwise, mint a new position
-            (uint256 tokenId, uint128 liquidity, uint256 amount0In, uint256 amount1In) = mint(
-                metrics.token0,
-                metrics.token1,
-                metrics.amount0,
-                metrics.amount1,
-                metrics.tickLower,
-                metrics.tickUpper,
-                metrics.fee
-            );
-            tokenIds[pool][metrics.tickLower][metrics.tickUpper] = tokenId;
-            position = Position(tokenId, liquidity, amount0In, amount1In, metrics.token0, metrics.token1);
-        }
+        // Mint liquidity to pool and create callback to ourselves
+        IUniswapV3Pool(pool).mint(address(this), metrics.tickLower, metrics.tickUpper, metrics.liquidity, "");
     }
 
-    function calc_metrics(address pool) public view returns (MetricParams memory) {
+    function uniswapV3MintCallback(uint256 amount0Owed, uint256 amount1Owed, bytes calldata)
+        external
+        override
+        isExecuting
+    {
+        // Fetch current position into memory
+        MetricParams memory position = metrics;
+
+        require(msg.sender == position.pool, UnauthorizedPool(position.pool, msg.sender));
+
+        // Transfer tokens to pool
+        IERC20(position.token0).safeTransfer(position.pool, amount0Owed);
+        IERC20(position.token1).safeTransfer(position.pool, amount1Owed);
+    }
+
+    function calcMetrics(address pool) public view returns (MetricParams memory) {
         // Fetch pool
         IUniswapV3Pool pool_contract = IUniswapV3Pool(pool);
         address token0 = pool_contract.token0();
@@ -114,25 +108,30 @@ contract Executor is IExecutor, Ownable {
         int24 tickLower;
         int24 tickUpper;
         uint160 sqrtPriceX96;
+        int24 tick;
         {
-            int24 tick;
             (sqrtPriceX96, tick,,,,,) = pool_contract.slot0();
 
             // Get the pool contract spacing
             int24 spacing = pool_contract.tickSpacing();
 
-            (tickLower, tickUpper) = calculate_tick_bounds(tick, spacing);
+            (tickLower, tickUpper) = calculateTickBounds(tick, spacing);
         }
 
-        MetricParams memory metrics = MetricParams(token0, token1, amount0Max, amount1Max, fee, tickLower, tickUpper);
-        return metrics;
+        // Given tick range, calculate the amount of liquidity we can add
+        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
+            TickMath.getSqrtRatioAtTick(tick),
+            TickMath.getSqrtRatioAtTick(tickLower),
+            TickMath.getSqrtRatioAtTick(tickUpper),
+            amount0Max,
+            amount1Max
+        );
+
+        MetricParams memory _metrics = MetricParams(pool, token0, token1, fee, tick, tickLower, tickUpper, liquidity);
+        return _metrics;
     }
 
-    function calculate_tick_bounds(int24 tick, int24 spacing)
-        internal
-        pure
-        returns (int24 tickLower, int24 tickUpper)
-    {
+    function calculateTickBounds(int24 tick, int24 spacing) internal pure returns (int24 tickLower, int24 tickUpper) {
         // Calculate lower and upper ticks
         // If tick is not on a boundary, then choose upper and lower bound
         int24 remain = tick % spacing;
@@ -145,86 +144,21 @@ contract Executor is IExecutor, Ownable {
         }
     }
 
-    function mint(
-        address token0,
-        address token1,
-        uint256 amount0,
-        uint256 amount1,
-        int24 tickLower,
-        int24 tickUpper,
-        uint24 fee
-    ) internal returns (uint256 tokenId, uint128 liquidity, uint256 amount0In, uint256 amount1In) {
-        // Supply liquidity to UniswapV3 pool
-        INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager.MintParams({
-            token0: token0,
-            token1: token1,
-            fee: fee,
-            tickLower: tickLower,
-            tickUpper: tickUpper,
-            amount0Desired: amount0,
-            amount1Desired: amount1,
-            amount0Min: 0,
-            amount1Min: 0,
-            recipient: address(this),
-            deadline: block.timestamp
-        });
-
-        (tokenId, liquidity, amount0In, amount1In) = manager.mint(params);
-    }
-
-    function increase(uint256 tokenId, uint256 amount0, uint256 amount1)
-        internal
-        returns (uint128 liquidity, uint256 amount0In, uint256 amount1In)
-    {
-        INonfungiblePositionManager.IncreaseLiquidityParams memory params = INonfungiblePositionManager
-            .IncreaseLiquidityParams({
-            tokenId: tokenId,
-            amount0Desired: amount0,
-            amount1Desired: amount1,
-            amount0Min: 0,
-            amount1Min: 0,
-            deadline: block.timestamp
-        });
-
-        (liquidity, amount0In, amount1In) = manager.increaseLiquidity(params);
-    }
-
     function finish() external override Executing onlyOwner {
         // Fetch position
-        Position memory _position = position;
-        INonfungiblePositionManager.CollectParams memory collectParams = INonfungiblePositionManager.CollectParams({
-            tokenId: _position.tokenId,
-            recipient: address(this),
-            amount0Max: type(uint128).max,
-            amount1Max: type(uint128).max
-        });
+        MetricParams memory _position = metrics;
 
-        manager.collect(collectParams);
+        // Burn liquidity and then collect tokens
+        IUniswapV3Pool(_position.pool).burn(_position.tickLower, _position.tickUpper, _position.liquidity);
+        IUniswapV3Pool(_position.pool).collect(
+            address(this), _position.tickLower, _position.tickUpper, type(uint128).max, type(uint128).max
+        );
 
-        // Decrease all of the liquidity
-        INonfungiblePositionManager.DecreaseLiquidityParams memory decreaseParams = INonfungiblePositionManager
-            .DecreaseLiquidityParams({
-            tokenId: _position.tokenId,
-            liquidity: _position.liquidity,
-            amount0Min: _position.amount0,
-            amount1Min: _position.amount1,
-            deadline: block.timestamp
-        });
-
-        manager.decreaseLiquidity(decreaseParams);
-        // Finish benchmark
-        address[] memory tokens = new address[](2);
+        // End benchmark
+        address[] memory tokens = new address[](3);
         tokens[0] = _position.token0;
         tokens[1] = _position.token1;
-
-        require(fundManager.end_benchmark(address(this), tokens), "EXECUTOR: Benchmark failed");
-    }
-
-    function setup(address[] calldata tokens) external override onlyOwner {
-        for (uint256 i = 0; i < tokens.length; i++) {
-            IERC20Token token = IERC20Token(tokens[i]);
-            token.approve(address(manager), type(uint256).max);
-        }
+        require(fundManager.endBenchmark(address(this), tokens), "EXECUTOR: Benchmark failed");
     }
 
     function withdraw(address[] calldata tokens) external override onlyOwner {

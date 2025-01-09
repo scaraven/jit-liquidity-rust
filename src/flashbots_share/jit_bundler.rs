@@ -18,6 +18,8 @@ sol!(
     #[sol(rpc)]
     "contracts/src/interfaces/IExecutor.sol"
 );
+// TODO! Create a struct which takes in a single sandwich Transaction, verifies, bundles it
+// Use a builder design pattern to create the struct
 
 trait FlashBotBundler {
     fn execute(self);

@@ -1,34 +1,41 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
-pragma abicoder v2;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-struct Pool {
-    address token0;
-    address token1;
-}
+import {IUniswapV3Factory} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
+import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 
 contract Whitelist is Ownable {
-    mapping(address => Pool) private whitelist;
+    mapping(address => bool) private whitelist;
+    IUniswapV3Factory public immutable uniswapFactory;
 
-    constructor(address _owner) Ownable(_owner) {}
+    error UnauthorizedPool(address expected, address actual);
 
-    function check_whitelist(address pool) external view returns (bool) {
-        return whitelist[pool].token0 != address(0) && whitelist[pool].token1 != address(0);
+    constructor(address _owner, address _factory) Ownable(_owner) {
+        uniswapFactory = IUniswapV3Factory(_factory);
     }
 
-    function add_whitelist(address pool, address token0, address token1) external onlyOwner returns (bool) {
-        whitelist[pool] = Pool(token0, token1);
+    function checkWhitelist(address pool) external view returns (bool) {
+        return whitelist[pool];
+    }
+
+    function addWhitelist(address pool) external onlyOwner returns (bool) {
+        address token0 = IUniswapV3Pool(pool).token0();
+        address token1 = IUniswapV3Pool(pool).token1();
+
+        uint24 fee = IUniswapV3Pool(pool).fee();
+
+        // Fetch address of the pool from the factory
+        address poolAddress = uniswapFactory.getPool(token0, token1, fee);
+        require(poolAddress == pool, UnauthorizedPool(poolAddress, pool));
+
+        whitelist[pool] = true;
         return true;
     }
 
-    function remove_whitelist(address pool) external onlyOwner returns (bool) {
+    function removeWhitelist(address pool) external onlyOwner returns (bool) {
         delete whitelist[pool];
         return true;
-    }
-
-    function get_whitelist(address pool) external view returns (address, address) {
-        return (whitelist[pool].token0, whitelist[pool].token1);
     }
 }

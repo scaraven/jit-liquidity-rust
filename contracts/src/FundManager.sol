@@ -15,29 +15,29 @@ contract FundManager is IFundManager, Ownable {
 
     constructor(address _owner) Ownable(_owner) {}
 
-    function start_benchmark(address client, address[] calldata tokens) external override onlyOwner {
-        usd_value = calculate_usd_value(client, tokens);
+    function startBenchmark(address client, address[] calldata tokens) external override onlyOwner {
+        usd_value = calculateUSDValue(client, tokens);
     }
 
-    function end_benchmark(address client, address[] calldata tokens) external view override onlyOwner returns (bool) {
+    function endBenchmark(address client, address[] calldata tokens) external view override onlyOwner returns (bool) {
         require(usd_value != 0, BenchmarkNotStarted());
-        uint256 current_usd_value = calculate_usd_value(client, tokens);
+        uint256 current_usd_value = calculateUSDValue(client, tokens);
 
         // Ensure that our portfolio has not decreased
         return current_usd_value > usd_value;
     }
 
-    function set_oracle(address _oracle) external override onlyOwner {
+    function setOracle(address _oracle) external override onlyOwner {
         oracle = IOracle(_oracle);
     }
 
-    function calculate_usd_value(address client, address[] calldata tokens) public view returns (uint256) {
+    function calculateUSDValue(address client, address[] calldata tokens) public view returns (uint256) {
         // Loop through all the tokens and calcualte the total USD value
         uint256 total_usd_value = 0;
 
         for (uint256 i = 0; i < tokens.length; i++) {
             // Ensure decimals is correct!
-            uint256 price = oracle.get_price(address(tokens[i]));
+            uint256 price = oracle.getPrice(address(tokens[i]));
 
             uint256 balance;
             if (tokens[i] == address(0)) {
