@@ -54,4 +54,9 @@ contract Oracle is IOracle, Ownable {
     function setFeed(address token, address oracle) external onlyOwner {
         feeds[token] = oracle;
     }
+
+    // Return oracle decimals
+    function getDecimals() external pure returns (uint256) {
+        return DECIMALS;
+    }
 }

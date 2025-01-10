@@ -12,6 +12,9 @@ contract FundManagerTest is Test {
     MockERC20 token0;
     MockERC20 token1;
 
+    MockERC20 token2;
+    MockERC20 token3;
+
     address oracle;
     address alice;
 
@@ -23,12 +26,20 @@ contract FundManagerTest is Test {
         alice = makeAddr("alice");
 
         // Setup tokens
-        token0 = new MockERC20("", "", 18, 10);
-        token1 = new MockERC20("", "", 18, 100);
+        token0 = new MockERC20("", "", 0, 10);
+        token1 = new MockERC20("", "", 0, 100);
+
+        // Tokens with realistic decimals
+        token2 = new MockERC20("", "", 8, 10 * 10 ** 8);
+        token3 = new MockERC20("", "", 18, 1 ether);
 
         // Set default prices
         MockOracle(oracle).setPrice(address(token0), 100);
         MockOracle(oracle).setPrice(address(token1), 5);
+
+        // Set decimals
+        MockOracle(oracle).setPrice(address(token2), 2 * 10 ** 8);
+        MockOracle(oracle).setPrice(address(token3), 5 * 10 ** 8);
     }
 
     function testOnlyOwnerCanInteract() public {
@@ -89,9 +100,9 @@ contract FundManagerTest is Test {
     }
 
     function testPortfolioIncreaseEth() public {
-        vm.deal(address(this), 10);
+        vm.deal(address(this), 1 ether);
 
-        MockOracle(oracle).setPrice(address(0), 1000);
+        MockOracle(oracle).setPrice(address(0), 10000);
 
         address[] memory tokens = new address[](3);
         tokens[0] = address(token0);
@@ -103,7 +114,7 @@ contract FundManagerTest is Test {
         manager.startBenchmark(address(this), tokens);
 
         // Increase value of portfolio
-        MockOracle(oracle).setPrice(address(0), 2000);
+        MockOracle(oracle).setPrice(address(0), 20000);
 
         manager.endBenchmark(address(this), tokens);
 
@@ -114,5 +125,13 @@ contract FundManagerTest is Test {
         vm.expectRevert(BenchmarkNotStarted.selector);
         address[] memory tokens = new address[](0);
         manager.endBenchmark(address(this), tokens);
+    }
+
+    function testBenchmarkWithDifferentDecimals() public view {
+        address[] memory tokens = new address[](2);
+        tokens[0] = address(token2);
+        tokens[1] = address(token3);
+
+        assertEq(manager.calculateUSDValue(address(this), tokens), 25 * (10 ** manager.DECIMALS()));
     }
 }

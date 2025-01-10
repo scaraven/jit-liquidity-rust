@@ -19,10 +19,7 @@ contract WhitelistTest is Test {
     address constant FACTORY = address(0x1F98431c8aD98523631AE4a59f267346ea31F984);
 
     function setUp() public {
-        // Create fork
-        uint256 forkId = vm.createFork(vm.envString("INFURA_URL"), vm.envUint("INFURA_URL_BLOCK"));
-        vm.selectFork(forkId);
-
+        vm.createSelectFork(vm.envString("INFURA_URL"), vm.envUint("INFURA_URL_BLOCK"));
         // Dummy addresses
         alice = makeAddr("alice");
         bob = makeAddr("bob");

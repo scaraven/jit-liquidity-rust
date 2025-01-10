@@ -18,6 +18,12 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 contract Executor is IExecutor, Ownable {
     using SafeERC20 for IERC20;
 
+    error BenchMarkFailure();
+
+    // Constants for rounding and margin of error
+    uint128 private constant BASE = 100;
+    uint128 private constant PERCENTAGE = 90;
+
     struct MetricParams {
         address pool;
         address token0;
@@ -44,7 +50,7 @@ contract Executor is IExecutor, Ownable {
     }
 
     modifier isExecuting() {
-        require(execution_bit == 1, "EXECUTOR: Not executing");
+        require(execution_bit == 1, "EXECUTOR: execute() has not been called");
         _;
     }
 
@@ -127,7 +133,8 @@ contract Executor is IExecutor, Ownable {
             amount1Max
         );
 
-        MetricParams memory _metrics = MetricParams(pool, token0, token1, fee, tick, tickLower, tickUpper, liquidity);
+        MetricParams memory _metrics =
+            MetricParams(pool, token0, token1, fee, tick, tickLower, tickUpper, liquidity * PERCENTAGE / BASE);
         return _metrics;
     }
 
@@ -158,7 +165,7 @@ contract Executor is IExecutor, Ownable {
         address[] memory tokens = new address[](3);
         tokens[0] = _position.token0;
         tokens[1] = _position.token1;
-        require(fundManager.endBenchmark(address(this), tokens), "EXECUTOR: Benchmark failed");
+        require(fundManager.endBenchmark(address(this), tokens), BenchMarkFailure());
     }
 
     function withdraw(address[] calldata tokens) external override onlyOwner {

@@ -10,11 +10,17 @@ import {Executor} from "@core/Executor.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+
 contract ExecutorTest is Test {
     Whitelist whitelist;
     FundManager fundManager;
     Executor executor;
     Oracle oracle;
+
+    address public alice;
+
+    ISwapRouter public swapRouter;
 
     address constant POOL_ADDR = address(0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640);
     address constant WETH = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
@@ -32,9 +38,9 @@ contract ExecutorTest is Test {
     address constant FACTORY = address(0x1F98431c8aD98523631AE4a59f267346ea31F984);
 
     function setUp() public {
-        // Create fork
-        uint256 forkId = vm.createFork(vm.envString("INFURA_URL"), vm.envUint("INFURA_URL_BLOCK"));
-        vm.selectFork(forkId);
+        vm.createSelectFork(vm.envString("INFURA_URL"), vm.envUint("INFURA_URL_BLOCK"));
+        swapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+        alice = makeAddr("alice");
 
         // Initialize the Whitelist contract
         whitelist = new Whitelist(address(this), FACTORY);
@@ -58,11 +64,18 @@ contract ExecutorTest is Test {
         IERC20(WETH).balanceOf(WETH_WHALE);
         IERC20(USDC).balanceOf(USDC_WHALE);
 
-        vm.prank(WETH_WHALE);
-        IERC20(WETH).transfer(address(executor), 100_000_000);
+        vm.startPrank(WETH_WHALE);
+        IERC20(WETH).transfer(address(executor), 1 ether);
+        IERC20(WETH).transfer(alice, 1000 ether);
+        assertEq(IERC20(WETH).balanceOf(address(executor)), 1 ether);
+        vm.stopPrank();
 
-        vm.prank(USDC_WHALE);
-        IERC20(USDC).transfer(address(executor), 100_000_000);
+        // 10000 USDC tokens
+        vm.startPrank(USDC_WHALE);
+        IERC20(USDC).transfer(address(executor), 1000 * (10 ** 8));
+        IERC20(USDC).transfer(alice, 1500 * (10 ** 8));
+        assertEq(IERC20(USDC).balanceOf(address(executor)), 1000 * (10 ** 8));
+        vm.stopPrank();
     }
 
     function testCalcMetrics() public view {
@@ -79,20 +92,37 @@ contract ExecutorTest is Test {
         assertEq(metric.tickLower, 193670);
         // sqrtPrice at upper tick: 1271677757124143518465928949549624
         assertEq(metric.tickUpper, 193680);
-
-        // Assert that liquidity is correct: 17807.268
-        assertEq(metric.liquidity, 17807268);
     }
 
-    /*
-    function testExecute() public {
+    function testExecuteFailure() public {
         executor.execute(POOL_ADDR);
 
-        // Assert that all of the USDC has gone due to it being in the uniswap pool
-        assertEq(IERC20(USDC).balanceOf(address(executor)), 0);
-
-        // Assert that the executor has the correct amount of WETH
-        assertEq(IERC20(WETH).balanceOf(address(executor)), 100_000_000);
+        // No-one swapped so benchmark should fail
+        vm.expectRevert(Executor.BenchMarkFailure.selector);
+        executor.finish();
     }
-    */
+
+    function testExecuteWithSwap() public {
+        executor.execute(POOL_ADDR);
+
+        // Swap some WETH for USDC
+        vm.startPrank(alice);
+        IERC20(USDC).approve(address(swapRouter), 1500 * (10 ** 8));
+        swapRouter.exactInputSingle(
+            ISwapRouter.ExactInputSingleParams({
+                tokenIn: USDC,
+                tokenOut: WETH,
+                fee: 500,
+                recipient: address(this),
+                deadline: block.timestamp,
+                amountIn: 1500 * (10 ** 8),
+                amountOutMinimum: 0,
+                sqrtPriceLimitX96: 0
+            })
+        );
+        vm.stopPrank();
+
+        // Finish execution
+        executor.finish();
+    }
 }

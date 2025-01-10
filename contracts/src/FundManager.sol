@@ -4,11 +4,16 @@ pragma solidity ^0.8.0;
 import {IFundManager} from "./interfaces/IFundManager.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IOracle} from "./interfaces/IOracle.sol";
-import {IERC20Token} from "./interfaces/IERC20Token.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 error BenchmarkNotStarted();
 
+event FundChange(uint256, uint256);
+
 contract FundManager is IFundManager, Ownable {
+    uint256 public constant DECIMALS = 8;
+    uint256 public constant ETH_DECIMALS = 18;
+
     IOracle public oracle;
 
     uint256 public usd_value;
@@ -19,9 +24,11 @@ contract FundManager is IFundManager, Ownable {
         usd_value = calculateUSDValue(client, tokens);
     }
 
-    function endBenchmark(address client, address[] calldata tokens) external view override onlyOwner returns (bool) {
+    function endBenchmark(address client, address[] calldata tokens) external override onlyOwner returns (bool) {
         require(usd_value != 0, BenchmarkNotStarted());
         uint256 current_usd_value = calculateUSDValue(client, tokens);
+
+        emit FundChange(usd_value, current_usd_value);
 
         // Ensure that our portfolio has not decreased
         return current_usd_value > usd_value;
@@ -40,12 +47,21 @@ contract FundManager is IFundManager, Ownable {
             uint256 price = oracle.getPrice(address(tokens[i]));
 
             uint256 balance;
+            uint256 decimals;
             if (tokens[i] == address(0)) {
                 balance = client.balance;
+                decimals = ETH_DECIMALS;
             } else {
-                balance = IERC20Token(tokens[i]).balanceOf(client);
+                balance = ERC20(tokens[i]).balanceOf(client);
+                decimals = ERC20(tokens[i]).decimals();
             }
-            total_usd_value += price * balance;
+
+            decimals += oracle.getDecimals();
+            if (decimals < DECIMALS) {
+                total_usd_value += price * balance * (10 ** (DECIMALS - decimals));
+            } else {
+                total_usd_value += price * balance / (10 ** (decimals - DECIMALS));
+            }
         }
         return total_usd_value;
     }

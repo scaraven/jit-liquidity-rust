@@ -13,4 +13,8 @@ contract MockOracle is IOracle {
     function getPrice(address token) external view override returns (uint256) {
         return prices[token];
     }
+
+    function getDecimals() external pure override returns (uint256) {
+        return 8;
+    }
 }
