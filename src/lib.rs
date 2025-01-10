@@ -37,3 +37,12 @@ pub mod executor;
 
 #[path = "config/testconfig.rs"]
 pub mod testconfig;
+
+#[path = "flashbots_share/jit_bundler.rs"]
+mod jit_bundler;
+
+#[path = "flashbots_share/extraction.rs"]
+mod extraction;
+
+#[path = "flashbots_share/bundler.rs"]
+mod bundler;

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Start anvil and run in the background
-anvil --fork-url $1 > /dev/null 2>&1 &
+anvil --fork-url $1 --fork-block-number $2 > /dev/null 2>&1 &
 ANVIL_PID=$!
 
 echo "Anvil started with PID $ANVIL_PID"

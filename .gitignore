@@ -21,7 +21,7 @@ target/
 /target
 
 # Environment variables
-.env
+**/*.env
 
 # Vim cache files
 *.swp
