@@ -41,8 +41,11 @@ pub mod testconfig;
 #[path = "flashbots_share/jit_bundler.rs"]
 mod jit_bundler;
 
-#[path = "flashbots_share/extraction.rs"]
-mod extraction;
+#[path = "flashbots_share/bundle_extraction.rs"]
+mod bundle_extraction;
 
 #[path = "flashbots_share/bundler.rs"]
 mod bundler;
+
+#[path = "flashbots_share/bundle_forwarder.rs"]
+mod bundle_forwarder;

@@ -12,7 +12,7 @@ use eyre::Result;
 
 use IExecutor::IExecutorInstance;
 
-use crate::{engine::EngineTask, extraction};
+use crate::{bundle_extraction, engine::EngineTask};
 
 sol!(
     #[sol(rpc)]
@@ -61,7 +61,7 @@ where
         let result = result
             .first()
             .ok_or_else(|| eyre::eyre!("No result found"))?;
-        let logs = extraction::extract(result.as_ref().unwrap().result.clone());
+        let logs = bundle_extraction::extract(result.as_ref().unwrap().result.clone());
 
         // For now assert that we only have one Swap log
         // TODO: Handle multiple logs
