@@ -15,7 +15,7 @@ impl TxEngineFilterType {
     fn filter(&self, tx: &ResultAndState) -> bool {
         match self {
             TxEngineFilterType::AccountSlotModified(addr) => {
-                tx.state.get(addr).map_or(false, |acc| acc.is_touched())
+                tx.state.get(addr).is_some_and(|acc| acc.is_touched())
             }
             TxEngineFilterType::Identity => true,
             TxEngineFilterType::IsSuccess => tx.result.is_success(),
