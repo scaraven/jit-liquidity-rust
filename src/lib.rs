@@ -49,3 +49,6 @@ mod bundler;
 
 #[path = "flashbots_share/bundle_forwarder.rs"]
 mod bundle_forwarder;
+
+#[path = "flashbots_share/mev.rs"]
+mod mev;

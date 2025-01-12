@@ -18,7 +18,6 @@ use alloy::{
 };
 
 use alloy_mev::MevHttp;
-use eyre::Result;
 
 struct BundleForwarder<
     P: Provider<T, N>,

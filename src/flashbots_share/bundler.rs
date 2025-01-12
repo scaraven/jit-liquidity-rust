@@ -3,16 +3,16 @@ use alloy::{
     network::{EthereumWallet, TransactionBuilder},
     rpc::types::{
         mev::{BundleItem, SendBundleRequest},
-        TransactionRequest,
+        Transaction as RpcTransaction, TransactionRequest,
     },
 };
 
 use eyre::Result;
 
-pub async fn create_bundle<T: Transaction>(
+pub async fn create_bundle(
     wallet: EthereumWallet,
     frontrun: TransactionRequest,
-    sandwich: T,
+    sandwich: RpcTransaction,
     backrun: TransactionRequest,
     block_number: u64,
 ) -> Result<SendBundleRequest> {

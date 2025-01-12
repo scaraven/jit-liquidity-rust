@@ -20,10 +20,17 @@ sol!(
 );
 // TODO! Create a struct which takes in a single sandwich Transaction, verifies, bundles it
 // Use a builder design pattern to create the struct
-
-trait FlashBotBundler {
-    fn execute(self);
-    fn simulate(&self);
+pub trait SandwichBundler<
+    P: Provider<T, N>,
+    T: Clone + Transport = BoxTransport,
+    N: Network = Ethereum,
+>
+{
+    async fn build(
+        &self,
+        provider: Arc<P>,
+        tx: TransactionRequest,
+    ) -> Result<(Vec<TransactionRequest>, Vec<TransactionRequest>)>;
 }
 
 struct UniswapV3LiquidityBundler<
@@ -32,7 +39,6 @@ struct UniswapV3LiquidityBundler<
     N: Network = Ethereum,
 > {
     executor: IExecutorInstance<T, P, N>,
-    sandwich_transaction: TransactionRequest,
 }
 
 impl<P, T, N> UniswapV3LiquidityBundler<P, T, N>
@@ -41,20 +47,25 @@ where
     T: Transport + Clone,
     N: Network<TransactionRequest = TransactionRequest>,
 {
-    pub fn new(
-        executor: IExecutorInstance<T, P, N>,
-        sandwich_transaction: TransactionRequest,
-    ) -> Self {
-        Self {
-            executor,
-            sandwich_transaction,
-        }
+    pub fn new(executor: IExecutorInstance<T, P, N>) -> Self {
+        Self { executor }
     }
+}
 
-    pub async fn build(self, provider: Arc<P>) -> Result<(TransactionRequest, TransactionRequest)> {
+impl<P, T, N> SandwichBundler<P, T, N> for UniswapV3LiquidityBundler<P, T, N>
+where
+    P: Provider<T, N>,
+    T: Transport + Clone,
+    N: Network<TransactionRequest = TransactionRequest>,
+{
+    async fn build(
+        &self,
+        provider: Arc<P>,
+        tx: TransactionRequest,
+    ) -> Result<(Vec<TransactionRequest>, Vec<TransactionRequest>)> {
         // Extract pool address
         // Create an engine task and execute
-        let task = EngineTask::new(provider, vec![self.sandwich_transaction.clone()]);
+        let task = EngineTask::new(provider, vec![tx]);
         let result = task.consume();
 
         // Extract ResultAndState and assert we have no errors
@@ -73,6 +84,6 @@ where
         let frontrun = self.executor.execute(log.pool).into_transaction_request();
         let backrun = self.executor.finish().into_transaction_request();
 
-        Ok((frontrun, backrun))
+        Ok((vec![frontrun], vec![backrun]))
     }
 }
