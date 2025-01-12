@@ -12,3 +12,4 @@ foldhash = "0.1.4"
 futures-util = "0.3"
 revm = { version = "19.1.0", features = ["alloydb"] }
 tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1.0"
