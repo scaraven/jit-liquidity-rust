@@ -19,7 +19,7 @@ use alloy::{
 
 use alloy_mev::MevHttp;
 
-struct BundleForwarder<
+pub struct BundleForwarder<
     P: Provider<T, N>,
     S: Signer + Clone + Send + Sync + 'static,
     T: Clone + Transport = BoxTransport,
@@ -46,7 +46,7 @@ where
         }
     }
 
-    pub async fn simulate_bundle(self, signer: S) -> TransportResult<SimBundleResponse> {
+    pub async fn simulate_bundle(self) -> TransportResult<SimBundleResponse> {
         // Send the bundle to the flashbots relay
         let request = self
             .flashbot_provider
@@ -55,12 +55,15 @@ where
 
         RpcCall::new(
             request,
-            MevHttp::flashbots(self.flashbot_provider.client().transport().clone(), signer),
+            MevHttp::flashbots(
+                self.flashbot_provider.client().transport().clone(),
+                self.signer,
+            ),
         )
         .await
     }
 
-    pub async fn send_bundle(self, signer: S) -> TransportResult<SimBundleResponse> {
+    pub async fn send_bundle(self) -> TransportResult<SimBundleResponse> {
         // Send the bundle to the flashbots relay
         let request = self
             .flashbot_provider
@@ -69,7 +72,10 @@ where
 
         RpcCall::new(
             request,
-            MevHttp::flashbots(self.flashbot_provider.client().transport().clone(), signer),
+            MevHttp::flashbots(
+                self.flashbot_provider.client().transport().clone(),
+                self.signer,
+            ),
         )
         .await
     }

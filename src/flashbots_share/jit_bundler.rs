@@ -5,32 +5,65 @@ use alloy::{
     providers::Provider,
     rpc::types::TransactionRequest,
     sol,
+    sol_types::SolEvent,
     transports::{BoxTransport, Transport},
 };
 
 use eyre::Result;
 
+use revm::primitives::{Address, ExecutionResult, Log};
+use sandwich_bundler::SandwichBundler;
 use IExecutor::IExecutorInstance;
 
-use crate::{bundle_extraction, engine::EngineTask};
+use crate::engine::EngineTask;
+
+pub mod sandwich_bundler;
 
 sol!(
     #[sol(rpc)]
     "contracts/src/interfaces/IExecutor.sol"
 );
-// TODO! Create a struct which takes in a single sandwich Transaction, verifies, bundles it
-// Use a builder design pattern to create the struct
-pub trait SandwichBundler<
-    P: Provider<T, N>,
-    T: Clone + Transport = BoxTransport,
-    N: Network = Ethereum,
->
-{
-    async fn build(
-        &self,
-        provider: Arc<P>,
-        tx: TransactionRequest,
-    ) -> Result<(Vec<TransactionRequest>, Vec<TransactionRequest>)>;
+
+sol! {
+    #[sol(rpc)]
+    event Swap(
+    address sender,
+    address recipient,
+    int256 amount0,
+    int256 amount1,
+    uint160 sqrtPriceX96,
+    uint128 liquidity,
+    int24 tick);
+}
+
+pub struct UniswapV3SwapInfo {
+    pub pool: Address,
+}
+
+/// Extract key information from UniswapV3 logs.
+///
+/// # Arguments
+///
+/// * `tx` - The transaction result which potentially contains logs.
+///
+/// # Returns
+///
+/// * `Vec<Log<Swap>` - The resulting swap logs.
+fn decode_uniswapv3_logs(tx: ExecutionResult) -> Result<Vec<UniswapV3SwapInfo>> {
+    // Assert that we are using Uniswap V3 with the corret function signatures
+    let result = tx.into_logs();
+
+    result
+        .into_iter()
+        .filter_map(|res| Swap::decode_log(&res, true).ok())
+        .map(extract_uniswapv3_info)
+        .collect::<Result<Vec<UniswapV3SwapInfo>>>()
+}
+
+fn extract_uniswapv3_info(log: Log<Swap>) -> Result<UniswapV3SwapInfo> {
+    let pool = log.address;
+
+    Ok(UniswapV3SwapInfo { pool })
 }
 
 struct UniswapV3LiquidityBundler<
@@ -72,7 +105,7 @@ where
         let result = result
             .first()
             .ok_or_else(|| eyre::eyre!("No result found"))?;
-        let logs = bundle_extraction::extract(result.as_ref().unwrap().result.clone());
+        let logs = decode_uniswapv3_logs(result.as_ref().unwrap().result.clone())?;
 
         // For now assert that we only have one Swap log
         // TODO: Handle multiple logs
