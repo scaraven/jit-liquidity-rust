@@ -24,7 +24,7 @@ pub mod addresses;
 pub mod subscribe;
 
 #[path = "watcher/subscribe_filter.rs"]
-mod subscribe_filter;
+pub mod subscribe_filter;
 
 #[path = "simulation/engine.rs"]
 pub mod engine;
@@ -38,14 +38,5 @@ pub mod executor;
 #[path = "config/testconfig.rs"]
 pub mod testconfig;
 
-#[path = "flashbots_share/jit_bundler.rs"]
-mod jit_bundler;
-
-#[path = "flashbots_share/bundler.rs"]
-mod bundler;
-
-#[path = "flashbots_share/bundle_forwarder.rs"]
-mod bundle_forwarder;
-
 #[path = "flashbots_share/mev.rs"]
-mod mev;
+pub mod mev;

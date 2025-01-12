@@ -1,3 +1,8 @@
+mod bundle_forwarder;
+mod bundler;
+mod jit_bundler;
+mod sandwich_bundler;
+
 use std::sync::Arc;
 
 use alloy::{
@@ -8,7 +13,8 @@ use alloy::{
     transports::http::{Client, Http},
 };
 
-use crate::{bundle_forwarder::BundleForwarder, jit_bundler::sandwich_bundler::SandwichBundler};
+use bundle_forwarder::BundleForwarder;
+use sandwich_bundler::SandwichBundler;
 
 use eyre::Result;
 
@@ -58,7 +64,7 @@ where
             .build(self.provider, self.sandwich_tx.clone().into())
             .await?;
 
-        let bundle = crate::bundler::create_bundle(
+        let bundle = bundler::create_bundle(
             self.tx_wallet,
             sandwich.0,
             self.sandwich_tx,

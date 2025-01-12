@@ -17,7 +17,7 @@ use IExecutor::IExecutorInstance;
 
 use crate::engine::EngineTask;
 
-pub mod sandwich_bundler;
+use super::sandwich_bundler;
 
 sol!(
     #[sol(rpc)]
