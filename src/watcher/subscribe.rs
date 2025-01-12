@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{atomic, Arc};
 
 use crate::subscribe_filter::ShallowFilter;
 use alloy::{
@@ -10,10 +10,16 @@ use eyre::Result;
 use futures_util::StreamExt;
 use tokio::{sync::Mutex, task::JoinHandle};
 
+pub struct ShutdownConfig {
+    pub flag: Arc<atomic::AtomicBool>,
+    pub result: Arc<atomic::AtomicBool>, // true if stream finished
+}
+
 pub async fn subscribe_to_pending<P, T>(
     provider: Arc<P>,
     filter_type: T,
     tx_buffer: Arc<Mutex<Vec<Transaction>>>,
+    shutdown_config: ShutdownConfig,
 ) -> Result<JoinHandle<()>>
 where
     P: Provider<PubSubFrontend> + Send + Sync + 'static,
@@ -22,41 +28,54 @@ where
     let sub = provider.subscribe_pending_transactions().await.unwrap();
 
     // Filter stream based on filter type
-    let stream = sub
-        .into_stream()
-        // Filter and map transaction hashes based on whether we find valid corresponding transactions
-        .filter_map(move |tx_hash| {
-            let provider = provider.clone();
-            let filter_type = filter_type.clone();
-            async move {
-                match provider.get_transaction_by_hash(tx_hash).await {
-                    Ok(tx) => tx.and_then(|tx| {
-                        if filter_type.filter(&tx) {
-                            Some(tx)
-                        } else {
-                            None
-                        }
-                    }),
-                    Err(e) => {
-                        println!("Error: {:#?}", e);
+    let stream = sub.into_stream().filter_map(move |tx_hash| {
+        let provider = provider.clone();
+        let filter_type = filter_type.clone();
+        async move {
+            match provider.get_transaction_by_hash(tx_hash).await {
+                Ok(tx) => tx.and_then(|tx| {
+                    if filter_type.filter(&tx) {
+                        Some(tx)
+                    } else {
                         None
                     }
+                }),
+                Err(e) => {
+                    println!("Error: {:#?}", e);
+                    None
                 }
             }
-        })
-        // TODO! Remove this take(1) and implement a proper shutdown mechanism
-        .take(1);
+        }
+    });
     println!("Awaiting pending transactions...");
+
+    // Pin the stream for use in the async block
+    let pinned_stream = Box::pin(stream);
 
     // Take the stream and print the pending transaction.
     let handle = tokio::spawn(async move {
-        let mut stream = Box::pin(stream);
-        while let Some(tx) = stream.as_mut().next().await {
-            // Add transaction to buffer
-            println!("Pending transaction: {:#?}", tx);
-            let mut buffer = tx_buffer.lock().await;
-            buffer.push(tx);
+        let mut stream = pinned_stream; // Store the stream in a pinned variable
+        loop {
+            tokio::select! {
+                tx = stream.next() => {
+                    if shutdown_config.flag.load(atomic::Ordering::SeqCst) {
+                        break;
+                    }
+                    if let Some(tx) = tx {
+                        // Add transaction to buffer
+                        println!("Pending transaction: {:#?}", tx);
+                        let mut buffer = tx_buffer.lock().await;
+                        buffer.push(tx);
+                    }
+                }
+                _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {
+                    if shutdown_config.flag.load(atomic::Ordering::SeqCst) {
+                        break;
+                    }
+                }
+            }
         }
+        shutdown_config.result.store(true, atomic::Ordering::SeqCst);
     });
 
     Ok(handle)
@@ -91,33 +110,66 @@ mod tests {
 
         let provider = Arc::new(ws_provider);
         let tx_buffer = Arc::new(Mutex::new(Vec::new()));
+        let shutdown_flag = Arc::new(atomic::AtomicBool::new(false)); // Added shutdown flag
+        let shutdown_result = Arc::new(atomic::AtomicBool::new(false)); // Added result flag
 
         // Start monitoring pending transactions
         let handle = subscribe_to_pending(
             provider.clone(),
             ShallowFilterType::Recipient(http_addr),
             tx_buffer.clone(),
+            ShutdownConfig {
+                flag: shutdown_flag.clone(),
+                result: shutdown_result.clone(),
+            },
         )
         .await
         .unwrap();
 
+        // Allow subscription to initialize
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
         // Send a transaction to ourselves
-        let _ = http_provider
-            .send_transaction(
-                TransactionRequest::default()
-                    .with_to(http_addr)
-                    .with_value(U256::from(100)),
-            )
-            .await
-            .unwrap()
-            .get_receipt()
-            .await
-            .unwrap();
+        for _ in 0..3 {
+            let _ = http_provider
+                .send_transaction(
+                    TransactionRequest::default()
+                        .with_to(http_addr)
+                        .with_value(U256::from(100)),
+                )
+                .await
+                .unwrap()
+                .get_receipt()
+                .await
+                .unwrap();
+        }
 
-        assert!(handle.await.is_ok(), "Error in pending transaction stream");
+        // Allow some time for processing the transaction
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
-        // acquire mutex after stream has finished
-        let buffer = tx_buffer.lock().await;
-        assert!(buffer.len() == 1, "No transactions received");
+        // Verify that a transaction has been received
+        {
+            let buffer = tx_buffer.lock().await;
+            // Assert size of buffer
+            assert_eq!(buffer.len(), 3, "Buffer should contain 3 transactions");
+        }
+
+        // Verify that the shutdown result has not yet been set
+        assert!(
+            !shutdown_result.load(atomic::Ordering::SeqCst),
+            "Stream should not have finished yet"
+        );
+
+        // Signal shutdown
+        shutdown_flag.store(true, atomic::Ordering::SeqCst);
+
+        // Wait for the stream to finish
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        // Verify that the shutdown result has been set
+        assert!(
+            shutdown_result.load(atomic::Ordering::SeqCst),
+            "Stream should have finished"
+        );
     }
 }
