@@ -1,5 +1,3 @@
-mod flashbot_mev;
-
 use alloy::{
     network::EthereumWallet,
     node_bindings::Anvil,

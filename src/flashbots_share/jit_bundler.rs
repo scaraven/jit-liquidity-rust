@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use async_trait::async_trait;
+
 use alloy::{
     network::{Ethereum, Network},
     providers::Provider,
@@ -66,12 +68,12 @@ fn extract_uniswapv3_info(log: Log<Swap>) -> Result<UniswapV3SwapInfo> {
     Ok(UniswapV3SwapInfo { pool })
 }
 
-struct UniswapV3LiquidityBundler<
+pub struct UniswapV3LiquidityBundler<
     P: Provider<T, N>,
     T: Clone + Transport = BoxTransport,
     N: Network = Ethereum,
 > {
-    executor: IExecutorInstance<T, P, N>,
+    executor: IExecutorInstance<T, Arc<P>, N>,
 }
 
 impl<P, T, N> UniswapV3LiquidityBundler<P, T, N>
@@ -80,11 +82,12 @@ where
     T: Transport + Clone,
     N: Network<TransactionRequest = TransactionRequest>,
 {
-    pub fn new(executor: IExecutorInstance<T, P, N>) -> Self {
+    pub fn new(executor: IExecutorInstance<T, Arc<P>, N>) -> Self {
         Self { executor }
     }
 }
 
+#[async_trait]
 impl<P, T, N> SandwichBundler<P, T, N> for UniswapV3LiquidityBundler<P, T, N>
 where
     P: Provider<T, N>,

@@ -11,7 +11,7 @@ use eyre::Result;
 use tokio_stream::StreamExt;
 
 pub async fn create_bundle(
-    wallet: EthereumWallet,
+    wallet: &EthereumWallet,
     frontrun: Vec<TransactionRequest>,
     sandwich: RpcTransaction,
     backrun: Vec<TransactionRequest>,
@@ -21,7 +21,7 @@ pub async fn create_bundle(
     // If any single transaction fails, the entire function will fail
     let signed_front = tokio_stream::iter(frontrun)
         .then(|tx| async {
-            tx.build(&wallet)
+            tx.build(wallet)
                 .await
                 .map(|sig| sig.input().clone())
                 .map_err(eyre::Report::new)
@@ -30,7 +30,7 @@ pub async fn create_bundle(
         .await?;
     let signed_back = tokio_stream::iter(backrun)
         .then(|tx| async {
-            tx.build(&wallet)
+            tx.build(wallet)
                 .await
                 .map(|sig| sig.input().clone())
                 .map_err(eyre::Report::new)

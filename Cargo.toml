@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 alloy = { version = "0.7.3", features = ["full", "node-bindings", "rpc-types-trace", "rpc-types-debug", "rpc-types-mev"] }
 alloy-mev = { git = "https://github.com/scaraven/alloy-mev", branch = "main" }
+async-trait = "0.1.85"
 dotenv = "0.15.0"
 eyre = "0.6"
 foldhash = "0.1.4"

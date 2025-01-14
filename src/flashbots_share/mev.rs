@@ -1,6 +1,6 @@
 mod bundle_forwarder;
 mod bundler;
-mod jit_bundler;
+pub mod jit_bundler;
 mod sandwich_bundler;
 
 use std::sync::Arc;
@@ -18,20 +18,21 @@ use sandwich_bundler::SandwichBundler;
 
 use eyre::Result;
 
-struct FlashBotMev<
+pub struct FlashBotMev<
+    'a,
     P: Provider<Http<Client>>,
     B: SandwichBundler<P, Http<Client>>,
     S: Signer + Clone + Send + Sync + 'static,
 > {
     provider: Arc<P>,
     flashbot_provider: Arc<P>,
-    tx_wallet: EthereumWallet,
+    tx_wallet: &'a EthereumWallet,
     flashbot_signer: S,
     bundler: B,
     sandwich_tx: Transaction,
 }
 
-impl<P, B, S> FlashBotMev<P, B, S>
+impl<'a, P, B, S> FlashBotMev<'a, P, B, S>
 where
     P: Provider<Http<Client>>,
     B: SandwichBundler<P, Http<Client>>,
@@ -40,7 +41,7 @@ where
     pub fn new(
         provider: Arc<P>,
         flashbot_provider: Arc<P>,
-        tx_wallet: EthereumWallet,
+        tx_wallet: &'a EthereumWallet,
         flashbot_signer: S,
         bundler: B,
         sandwich_tx: Transaction,

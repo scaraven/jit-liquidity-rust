@@ -2048,6 +2048,7 @@ version = "0.2.0"
 dependencies = [
  "alloy",
  "alloy-mev",
+ "async-trait",
  "dotenv",
  "eyre",
  "foldhash",
