@@ -114,7 +114,7 @@ mod tests {
         let shutdown_result = Arc::new(atomic::AtomicBool::new(false)); // Added result flag
 
         // Start monitoring pending transactions
-        let handle = subscribe_to_pending(
+        let _handle = subscribe_to_pending(
             provider.clone(),
             ShallowFilterType::Recipient(http_addr),
             tx_buffer.clone(),
