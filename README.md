@@ -20,6 +20,7 @@ To run the bot, ensure you have the following tools installed:
 The following environment variables are required for testing:
 
 - `INFURA_URL`: RPC URL to fork the Ethereum blockchain.
+- `INFURA_WS_URL`: Websocket URL to listen to public transactions
 - `INFURA_URL_BLOCK`: Block number for forking the blockchain (default: `21431100`).
 - `TEST_PRIVATE_KEY`: Private key for testing (default: Anvil's pre-generated key: `0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80`).
 - `ETHERSCAN_API_KEY` (optional): Enables Foundry to provide detailed debugging messages.

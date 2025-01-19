@@ -2050,6 +2050,7 @@ dependencies = [
  "alloy-mev",
  "async-trait",
  "dotenv",
+ "either",
  "eyre",
  "foldhash",
  "futures-util",
