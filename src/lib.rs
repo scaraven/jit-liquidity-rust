@@ -20,11 +20,8 @@ pub mod setup;
 #[path = "utils/addresses.rs"]
 pub mod addresses;
 
-#[path = "watcher/subscribe.rs"]
-pub mod subscribe;
-
-#[path = "watcher/subscribe_filter.rs"]
-pub mod subscribe_filter;
+#[path = "watcher/subscribefilter.rs"]
+pub mod subscribefilter;
 
 #[path = "simulation/engine.rs"]
 pub mod engine;
@@ -40,3 +37,12 @@ pub mod testconfig;
 
 #[path = "flashbots_share/mev.rs"]
 pub mod mev;
+
+#[path = "watcher/mempool.rs"]
+pub mod mempool;
+
+#[path = "watcher/shutdownconfig.rs"]
+mod shutdownconfig;
+
+#[path = "watcher/membuilder.rs"]
+pub mod membuilder;

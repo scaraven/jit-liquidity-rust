@@ -55,4 +55,5 @@ jobs:
         env:
           TEST_PRIVATE_KEY: ${{ vars.TEST_PRIVATE_KEY }}
           INFURA_URL: ${{ secrets.INFURA_URL }}
+          INFURA_WS_URL: ${{ secrets.INFURA_WS_URL }}
           INFURA_URL_BLOCK: ${{ vars.INFURA_URL_BLOCK }}
