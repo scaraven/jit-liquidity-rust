@@ -4,8 +4,10 @@ version = "0.2.0"
 edition = "2021"
 
 [dependencies]
-alloy = { version = "0.7.3", features = ["full", "node-bindings", "rpc-types-trace", "rpc-types-debug", "rpc-types-mev"] }
+alloy = { version = "0.7.3", features = ["full", "node-bindings", "rpc-types-trace", "rpc-types-debug", "rpc-types-mev", "pubsub"] }
 alloy-mev = { git = "https://github.com/scaraven/alloy-mev", branch = "main" }
+alloy-pubsub = "0.9.2"
+
 async-trait = "0.1.85"
 dotenv = "0.15.0"
 either = "1.6.1"

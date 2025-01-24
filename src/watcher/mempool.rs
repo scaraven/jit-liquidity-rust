@@ -9,7 +9,9 @@ use tokio::{
     task::JoinHandle,
 };
 
-use crate::{shutdownconfig::ShutdownConfig, subscribefilter::ShallowFilter};
+use crate::{
+    alchemy::AlchemyProvider, shutdownconfig::ShutdownConfig, subscribefilter::ShallowFilter,
+};
 
 pub struct MemPool {
     provider: Arc<dyn Provider<PubSubFrontend> + Send + Sync>,
@@ -43,28 +45,17 @@ impl MemPool {
 
         let sub = self
             .provider
-            .subscribe_pending_transactions()
-            .await
-            .unwrap();
-        let provider = self.provider.clone();
+            .subscribe_full_pending_alchemy_transactions()
+            .await?;
 
         // Filter stream based on filter type
-        let stream = sub.into_stream().filter_map(move |tx_hash| {
-            let provider = provider.clone();
+        let stream = sub.into_stream().filter_map(move |tx| {
             let filter_type = filter_type.clone();
             async move {
-                match provider.get_transaction_by_hash(tx_hash).await {
-                    Ok(tx) => tx.and_then(|tx| {
-                        if filter_type.filter(&tx) {
-                            Some(tx)
-                        } else {
-                            None
-                        }
-                    }),
-                    Err(e) => {
-                        println!("Error: {:#?}", e);
-                        None
-                    }
+                if filter_type.filter(&tx) {
+                    Some(tx)
+                } else {
+                    None
                 }
             }
         });
@@ -90,7 +81,6 @@ impl MemPool {
                         }
                         if let Some(tx) = tx {
                             // Send transaction to channel
-                            println!("Pending transaction: {:#?}", tx);
                             // TODO: Better error handling
                             sender.send(tx).unwrap();
                         }
