@@ -46,3 +46,6 @@ mod shutdownconfig;
 
 #[path = "watcher/membuilder.rs"]
 pub mod membuilder;
+
+#[path = "providers/alchemy.rs"]
+pub mod alchemy;

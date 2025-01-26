@@ -10,9 +10,6 @@ use alloy::{
 
 use eyre::Result;
 
-// TODO! Create a struct which takes in a single sandwich Transaction, verifies, bundles it
-// Use a builder design pattern to create the struct
-
 #[async_trait]
 pub trait SandwichBundler<
     P: Provider<T, N>,

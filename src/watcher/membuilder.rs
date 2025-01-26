@@ -10,16 +10,13 @@ use crate::{mempool::MemPool, shutdownconfig::ShutdownConfig};
 
 #[derive(Default)]
 pub struct MemPoolBuilder {
-    provider: Option<Arc<dyn Provider<PubSubFrontend> + Send + Sync>>,
+    provider: Option<Arc<dyn Provider<PubSubFrontend>>>,
     shutdown_config: ShutdownConfig,
 }
 
 impl MemPoolBuilder {
     /// Set the provider for the mempool.
-    pub fn with_provider(
-        mut self,
-        provider: Arc<dyn Provider<PubSubFrontend> + Send + Sync>,
-    ) -> Self {
+    pub fn with_provider(mut self, provider: Arc<dyn Provider<PubSubFrontend>>) -> Self {
         self.provider = Some(provider);
         self
     }
