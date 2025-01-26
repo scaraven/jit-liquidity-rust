@@ -131,10 +131,7 @@ mod tests {
             mempool.subscribe(ShallowFilterType::None).await.unwrap();
 
         // Allow subscription to initialize
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-        // Allow some time for processing the transaction
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
         // Verify that the shutdown result has not yet been set
         assert!(!handle.is_finished(), "Stream should not have finished yet");
@@ -153,12 +150,9 @@ mod tests {
         // Verify that the shutdown result has been set
         assert!(shutdown.is_finished(), "Stream should have finished");
 
-        // Receive transactions
-        let mut count = 0;
-        while recv.recv().await.is_some() {
-            count += 1;
-        }
-
-        assert!(count > 0, "Should have received transactions");
+        assert!(
+            recv.recv().await.is_some(),
+            "Should have received transactions"
+        );
     }
 }
