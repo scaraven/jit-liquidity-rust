@@ -114,7 +114,6 @@ mod tests {
     async fn test_subscribe_to_pending() {
         let config = testconfig::TestConfig::load();
 
-        // TODO: Use test network instead of mainnet
         let provider = Arc::new(AlchemyProvider::new(
             create_ws_provider(&config.alchemy_ws_endpoint.unwrap())
                 .await
@@ -127,8 +126,39 @@ mod tests {
             .await
             .unwrap();
 
-        let (handle, mut recv, shutdown) =
+        let (_handle, mut recv, shutdown) =
             mempool.subscribe(ShallowFilterType::None).await.unwrap();
+
+        tokio::select! {
+            out = recv.recv() => {
+                assert!(out.is_some(), "Should have received a transaction");
+            }
+            _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
+                panic!("Timed out waiting for transaction");
+            }
+        }
+
+        // Shutdown the mempool
+        shutdown.finish();
+    }
+
+    #[tokio::test]
+    async fn test_subscribe_shutdown() {
+        let config = testconfig::TestConfig::load();
+
+        let provider = Arc::new(AlchemyProvider::new(
+            create_ws_provider(&config.alchemy_ws_endpoint.unwrap())
+                .await
+                .unwrap(),
+        ));
+
+        let mempool = MemPoolBuilder::default()
+            .with_provider(provider)
+            .build()
+            .await
+            .unwrap();
+
+        let (handle, _recv, shutdown) = mempool.subscribe(ShallowFilterType::None).await.unwrap();
 
         // Allow subscription to initialize
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -149,10 +179,5 @@ mod tests {
 
         // Verify that the shutdown result has been set
         assert!(shutdown.is_finished(), "Stream should have finished");
-
-        assert!(
-            recv.recv().await.is_some(),
-            "Should have received transactions"
-        );
     }
 }

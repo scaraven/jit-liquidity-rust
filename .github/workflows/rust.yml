@@ -57,3 +57,4 @@ jobs:
           INFURA_URL: ${{ secrets.INFURA_URL }}
           INFURA_WS_URL: ${{ secrets.INFURA_WS_URL }}
           INFURA_URL_BLOCK: ${{ vars.INFURA_URL_BLOCK }}
+          RPC_WS_TEST_URL: ${{ secrets.RPC_WS_TEST_URL }}

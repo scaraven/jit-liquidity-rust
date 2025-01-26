@@ -15,7 +15,7 @@ impl TestConfig {
     pub fn load() -> Self {
         dotenv::dotenv().ok();
         Self {
-            alchemy_ws_endpoint: std::env::var("INFURA_WS_URL").ok(),
+            alchemy_ws_endpoint: std::env::var("RPC_WS_TEST_URL").ok(),
             anvil_endpoint: std::env::var("ANVIL_ENDPOINT")
                 .map_or(DEFAULT_ENDPOINT.to_owned(), |v| v),
             anvil_ws_endpoint: std::env::var("ANVIL_WS_ENDPOINT")
