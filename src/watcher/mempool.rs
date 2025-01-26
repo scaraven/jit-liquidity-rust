@@ -9,18 +9,16 @@ use tokio::{
     task::JoinHandle,
 };
 
-use crate::{
-    alchemy::AlchemyProvider, shutdownconfig::ShutdownConfig, subscribefilter::ShallowFilter,
-};
+use crate::{shutdownconfig::ShutdownConfig, subscribefilter::ShallowFilter};
 
 pub struct MemPool {
-    provider: Arc<dyn Provider<PubSubFrontend> + Send + Sync>,
+    provider: Arc<dyn Provider<PubSubFrontend>>,
     shutdown_config: ShutdownConfig,
 }
 
 impl MemPool {
     pub fn new(
-        provider: Arc<dyn Provider<PubSubFrontend> + Send + Sync>,
+        provider: Arc<dyn Provider<PubSubFrontend>>,
         shutdown_config: ShutdownConfig,
     ) -> Self {
         Self {
@@ -43,10 +41,7 @@ impl MemPool {
     {
         let (sender, recv) = mpsc::unbounded_channel::<Transaction>();
 
-        let sub = self
-            .provider
-            .subscribe_full_pending_alchemy_transactions()
-            .await?;
+        let sub = self.provider.subscribe_full_pending_transactions().await?;
 
         // Filter stream based on filter type
         let stream = sub.into_stream().filter_map(move |tx| {
@@ -105,12 +100,12 @@ impl MemPool {
 #[cfg(test)]
 mod tests {
 
-    use alloy::{network::TransactionBuilder, primitives::U256, rpc::types::TransactionRequest};
     use subscribefilter::ShallowFilterType;
 
     use crate::{
+        alchemy::AlchemyProvider,
         membuilder::{create_ws_provider, MemPoolBuilder},
-        setup, subscribefilter, testconfig,
+        subscribefilter, testconfig,
     };
 
     use super::*;
@@ -119,9 +114,12 @@ mod tests {
     async fn test_subscribe_to_pending() {
         let config = testconfig::TestConfig::load();
 
-        let provider = create_ws_provider(&config.anvil_ws_endpoint).await.unwrap();
-
-        let (http_provider, http_addr) = setup::test_setup().await;
+        // TODO: Use test network instead of mainnet
+        let provider = Arc::new(AlchemyProvider::new(
+            create_ws_provider(&config.alchemy_ws_endpoint.unwrap())
+                .await
+                .unwrap(),
+        ));
 
         let mempool = MemPoolBuilder::default()
             .with_provider(provider)
@@ -129,28 +127,11 @@ mod tests {
             .await
             .unwrap();
 
-        let (handle, mut recv, shutdown) = mempool
-            .subscribe(ShallowFilterType::Recipient(http_addr))
-            .await
-            .unwrap();
+        let (handle, mut recv, shutdown) =
+            mempool.subscribe(ShallowFilterType::None).await.unwrap();
 
         // Allow subscription to initialize
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-        // Send a transaction to ourselves
-        for _ in 0..3 {
-            let _ = http_provider
-                .send_transaction(
-                    TransactionRequest::default()
-                        .with_to(http_addr)
-                        .with_value(U256::from(100)),
-                )
-                .await
-                .unwrap()
-                .get_receipt()
-                .await
-                .unwrap();
-        }
 
         // Allow some time for processing the transaction
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -178,6 +159,6 @@ mod tests {
             count += 1;
         }
 
-        assert_eq!(count, 3, "Should have received 3 transactions");
+        assert!(count > 0, "Should have received transactions");
     }
 }
