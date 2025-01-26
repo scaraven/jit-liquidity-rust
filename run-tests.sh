@@ -6,13 +6,23 @@ if [ -f .env ]; then
 fi
 
 # ---------- Set up arguments ----------
-USAGE_MESSAGE="Usage: $0 --fu <fork-url> --fbn <fork-block-number> --tn <test-name>"
+USAGE_MESSAGE="Usage: $0 [options]
+Options:
+  --fu <URL>          Infura URL to fork from
+  --fbn <BLOCK_NUMBER> Block number to fork from
+  --tn <TEST_NAME>    Name of the test to run (optional)
+  --help, -h          Display this message"
 
 # INFURA_URL
 URL=$INFURA_URL
 
 if [[ "$@" == *"--fu"* ]]; then
     URL=$(echo "$@" | grep -oP -- '--fu \K[^ ]+')
+fi
+
+if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
+    echo "$USAGE_MESSAGE"
+    exit 0
 fi
 
 
