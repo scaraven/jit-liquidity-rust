@@ -28,8 +28,8 @@ impl Config {
         let addr = key.address();
 
         Self {
-            rpc_url: std::env::var("INFURA_URL").ok(),
-            rpc_url_ws: std::env::var("INFURA_WS_URL").ok(),
+            rpc_url: std::env::var("RPC_URL").ok(),
+            rpc_url_ws: std::env::var("RPC_WS_URL").ok(),
             signer: key,
             address: addr,
             flashbot_signer: flashbot_key,

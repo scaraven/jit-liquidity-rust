@@ -14,7 +14,7 @@ contract OracleTest is Test {
     address constant USDC = address(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
 
     function setUp() public {
-        vm.createSelectFork(vm.envString("INFURA_URL"), vm.envUint("INFURA_URL_BLOCK"));
+        vm.createSelectFork(vm.envString("RPC_URL"), vm.envUint("RPC_TEST_URL_BLOCK"));
         oracle = new Oracle();
         oracle.setFeed(WBTC, BTC_USD);
         oracle.setFeed(address(0), ETH_USD);

@@ -8,13 +8,12 @@ fi
 # ---------- Set up arguments ----------
 USAGE_MESSAGE="Usage: $0 [options]
 Options:
-  --fu <URL>          Infura URL to fork from
+  --fu <URL>          RPC URL to fork from
   --fbn <BLOCK_NUMBER> Block number to fork from
   --tn <TEST_NAME>    Name of the test to run (optional)
   --help, -h          Display this message"
 
-# INFURA_URL
-URL=$INFURA_URL
+URL=$RPC_URL
 
 if [[ "$@" == *"--fu"* ]]; then
     URL=$(echo "$@" | grep -oP -- '--fu \K[^ ]+')
@@ -31,8 +30,7 @@ if [ -z "$URL" ]; then
     exit 1
 fi
 
-# INFURA_URL_BLOCK
-BLOCK_NUMBER=$INFURA_URL_BLOCK
+BLOCK_NUMBER=$RPC_TEST_URL_BLOCK
 
 if [[ "$@" == *"--fbn"* ]]; then
     BLOCK_NUMBER=$(echo "$@" | grep -oP -- '--fbn \K[^ ]+')

@@ -50,5 +50,5 @@ jobs:
           forge test -vvv
         id: test
         env:
-          INFURA_URL: ${{ secrets.INFURA_URL }}
-          INFURA_URL_BLOCK: ${{ vars.INFURA_URL_BLOCK }}
+          RPC_URL: ${{ secrets.RPC_URL }}
+          RPC_TEST_URL_BLOCK: ${{ vars.RPC_TEST_URL_BLOCK }}
