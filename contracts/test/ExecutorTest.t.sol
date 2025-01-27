@@ -38,7 +38,7 @@ contract ExecutorTest is Test {
     address constant FACTORY = address(0x1F98431c8aD98523631AE4a59f267346ea31F984);
 
     function setUp() public {
-        vm.createSelectFork(vm.envString("INFURA_URL"), vm.envUint("INFURA_URL_BLOCK"));
+        vm.createSelectFork(vm.envString("RPC_URL"), vm.envUint("RPC_TEST_URL_BLOCK"));
         swapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
         alice = makeAddr("alice");
 

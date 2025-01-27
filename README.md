@@ -9,7 +9,8 @@ To run the bot, ensure you have the following tools installed:
 3. **Environment Variables**: Create a `.env` file with the following keys:
    - `PRIVATE_KEY`: Your Ethereum private key.
    - `ANVIL_ENDPOINT`: URL for the Anvil RPC endpoint.
-   - `INFURA_URL`: Ethereum RPC URL (can be any valid Ethereum endpoint, not just Infura).
+   - `RPC_URL`: Ethereum RPC URL (can be any valid Ethereum endpoint, not just Infura).
+   - `RPC_WS_URL`: Ethereum RPC URL over Websockets, as of right now this only works with an Alchemy URL
 
 ## Running the Bot
 **TODO**: Instructions for running the bot are currently under development.
@@ -19,9 +20,9 @@ To run the bot, ensure you have the following tools installed:
 ### Environment Setup
 The following environment variables are required for testing:
 
-- `INFURA_URL`: RPC URL to fork the Ethereum blockchain.
-- `INFURA_WS_URL`: Websocket URL to listen to public transactions
-- `INFURA_URL_BLOCK`: Block number for forking the blockchain (default: `21431100`).
+- `RPC_URL`: RPC URL to fork the Ethereum blockchain.
+- `RPC_WS_TEST_URL`: Websocket URL to listen to public transactions, again only works with the Alchemy API
+- `RPC_TEST_URL_BLOCK`: Block number for forking the blockchain (default: `21431100`).
 - `TEST_PRIVATE_KEY`: Private key for testing (default: Anvil's pre-generated key: `0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80`).
 - `ETHERSCAN_API_KEY` (optional): Enables Foundry to provide detailed debugging messages.
 
@@ -41,18 +42,18 @@ This repository includes unit tests for both:
 Both require an RPC URL. Use the following commands to run tests:
 
 ```bash
-export $INFURA_URL="<your rpc url>"
-export $INFURA_URL_BLOCK=21431100
+export $RPC_URL="<your rpc url>"
+export $RPC_TEST_URL_BLOCK=21431100
+export $RPC_WS_TEST_URL="<your ws rpc url>"
 ./run-tests
 cd contracts
 forge test -vvv
 ```
 
 ## TODO List
-1. Expand the transaction filter to simulate transactions with REVM and identify internal calls to the UniswapV3 router (e.g., through logs).
-   - This will help capture value from protocols deploying DeFi strategies on-chain.
+1. ~~Expand the transaction filter to simulate transactions with REVM and identify internal calls to the UniswapV3 router (e.g., through logs).~~
 2. Enable bundling of multiple swaps for the same pool.
-3. Integrate with MEV-Share event stream and determine if it targets public mempool transactions.
+3. ~~Integrate with MEV-Share event stream and determine if it targets public mempool transactions.~~
 4. Create an end-to-end simulation example with integration tests.
 5. Add a health checker in Rust to stop the bot if critical issues arise.
 6. Implement an output formatter for user-friendly bot activity logs.
