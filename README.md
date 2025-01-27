@@ -51,10 +51,9 @@ forge test -vvv
 ```
 
 ## TODO List
-1. Expand the transaction filter to simulate transactions with REVM and identify internal calls to the UniswapV3 router (e.g., through logs).
-   - This will help capture value from protocols deploying DeFi strategies on-chain.
+1. ~~Expand the transaction filter to simulate transactions with REVM and identify internal calls to the UniswapV3 router (e.g., through logs).~~
 2. Enable bundling of multiple swaps for the same pool.
-3. Integrate with MEV-Share event stream and determine if it targets public mempool transactions.
+3. ~~Integrate with MEV-Share event stream and determine if it targets public mempool transactions.~~
 4. Create an end-to-end simulation example with integration tests.
 5. Add a health checker in Rust to stop the bot if critical issues arise.
 6. Implement an output formatter for user-friendly bot activity logs.
