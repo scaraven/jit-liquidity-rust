@@ -17,7 +17,7 @@ use revm::primitives::{Address, ExecutionResult, Log};
 use sandwich_bundler::SandwichBundler;
 use IExecutor::IExecutorInstance;
 
-use crate::engine::EngineTask;
+use crate::simulation::engine::EngineTask;
 
 use super::sandwich_bundler;
 

@@ -109,7 +109,10 @@ mod tests {
         primitives::{Address, FixedBytes, U256},
     };
 
-    use crate::{addresses, erc20, setup, utils};
+    use crate::{
+        interfaces::erc20,
+        utils::{addresses, blockchain_utils, setup},
+    };
 
     use super::*;
 
@@ -210,7 +213,7 @@ mod tests {
         let weth = *addresses::WETH;
 
         const BALANCE_SLOT: u8 = 3;
-        let storage_slot = utils::calculate_slot_mapping(
+        let storage_slot = blockchain_utils::calculate_slot_mapping(
             FixedBytes::<32>::left_padding_from(&bob.into_array()).to_vec(),
             BALANCE_SLOT,
         );

@@ -11,7 +11,7 @@ use revm::primitives::ResultAndState;
 
 use eyre::Result;
 
-use crate::tracing;
+use super::tracing;
 
 type TransactionBundle = Vec<TransactionRequest>;
 pub type EngineResultBundle = Vec<Result<ResultAndState>>;
@@ -58,7 +58,7 @@ where
 mod tests {
     use revm::primitives::{TxKind, U256};
 
-    use crate::{addresses, setup};
+    use crate::utils::{addresses, setup};
 
     use super::*;
 

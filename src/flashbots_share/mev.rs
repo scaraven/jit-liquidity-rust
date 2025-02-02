@@ -1,8 +1,3 @@
-mod bundle_forwarder;
-mod bundler;
-pub mod jit_bundler;
-mod sandwich_bundler;
-
 use std::sync::Arc;
 
 use alloy::{
@@ -13,8 +8,8 @@ use alloy::{
     transports::http::{Client, Http},
 };
 
-use bundle_forwarder::BundleForwarder;
-use sandwich_bundler::SandwichBundler;
+use super::sandwich_bundler::SandwichBundler;
+use super::{bundle_forwarder::BundleForwarder, bundler};
 
 use eyre::Result;
 

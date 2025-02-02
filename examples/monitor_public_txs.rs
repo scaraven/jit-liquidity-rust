@@ -1,18 +1,19 @@
 use std::sync::Arc;
 
-use jit_liquidity_rust::{
-    addresses,
-    alchemy::AlchemyProvider,
-    config,
-    membuilder::{create_ws_provider, MemPoolBuilder},
-    subscribefilter::ShallowFilterType,
-};
-
 use eyre::Result;
+use jit_liquidity_rust::{
+    config::runconfig,
+    providers::alchemy::AlchemyProvider,
+    utils::addresses,
+    watcher::{
+        membuilder::{create_ws_provider, MemPoolBuilder},
+        subscribefilter::ShallowFilterType,
+    },
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = config::Config::load();
+    let config = runconfig::Config::load();
 
     let provider = Arc::new(AlchemyProvider::new(
         create_ws_provider(&config.rpc_url_ws.expect("WS URL not set")).await?,

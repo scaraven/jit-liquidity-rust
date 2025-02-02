@@ -8,9 +8,8 @@ use alloy::{
 use eyre::Result;
 use IUniswapV2Router::IUniswapV2RouterInstance;
 
-use crate::{addresses, erc20, executor::Executor, utils};
-
-mod router02interface;
+use super::{erc20, executor::Executor, router02interface};
+use crate::utils::{addresses, blockchain_utils};
 
 const DELAY: u64 = 600;
 const MIN_ETH_DECIMALS: u64 = 18;
@@ -52,7 +51,7 @@ pub async fn buy_tokens_with_eth<P: Provider<Http<reqwest::Client>>>(
     to: Address,
 ) -> Result<()> {
     let router = *addresses::UNISWAP_V2_ROUTER;
-    let deadline = utils::get_block_timestamp_future(provider, DELAY).await?;
+    let deadline = blockchain_utils::get_block_timestamp_future(provider, DELAY).await?;
 
     for (token, amount) in tokens.into_iter().zip(amounts) {
         Executor::new(
@@ -224,7 +223,7 @@ pub fn remove_liquidity<P: Provider<Http<reqwest::Client>>>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{erc20, setup, utils};
+    use crate::utils::setup;
 
     const AMOUNT_DESIRED: u64 = 100000;
 
@@ -252,7 +251,7 @@ mod tests {
 
         let token_b = *addresses::USDC_ADDR;
         let amount_out_min = U256::ZERO;
-        let deadline = utils::get_block_timestamp_future(&provider, DELAY)
+        let deadline = blockchain_utils::get_block_timestamp_future(&provider, DELAY)
             .await
             .expect("GET_BLOCK_TIMESTAMP failed");
 
@@ -299,7 +298,7 @@ mod tests {
 
         let token_b = *addresses::USDC_ADDR;
         let amount_out_min = U256::ZERO;
-        let mut deadline = utils::get_block_timestamp_future(&provider, 0)
+        let mut deadline = blockchain_utils::get_block_timestamp_future(&provider, 0)
             .await
             .expect("GET_BLOCK_TIMESTAMP failed");
 
@@ -330,7 +329,7 @@ mod tests {
         let router = *addresses::UNISWAP_V2_ROUTER;
 
         let token_b = *addresses::USDC_ADDR;
-        let deadline = utils::get_block_timestamp_future(&provider, DELAY)
+        let deadline = blockchain_utils::get_block_timestamp_future(&provider, DELAY)
             .await
             .expect("GET_BLOCK_TIMESTAMP failed");
         let desired = U256::from(AMOUNT_DESIRED);
@@ -382,7 +381,7 @@ mod tests {
         buy_tokens_with_eth(&provider, vec![usdc, wbtc], vec![desired, desired], client)
             .await
             .unwrap();
-        let deadline = utils::get_block_timestamp_future(&provider, DELAY)
+        let deadline = blockchain_utils::get_block_timestamp_future(&provider, DELAY)
             .await
             .expect("GET_BLOCK_TIMESTAMP failed");
 
@@ -430,7 +429,7 @@ mod tests {
         buy_tokens_with_eth(&provider, vec![usdc, wbtc], vec![desired, desired], client)
             .await
             .unwrap();
-        let deadline = utils::get_block_timestamp_future(&provider, DELAY)
+        let deadline = blockchain_utils::get_block_timestamp_future(&provider, DELAY)
             .await
             .expect("GET_BLOCK_TIMESTAMP failed");
 
