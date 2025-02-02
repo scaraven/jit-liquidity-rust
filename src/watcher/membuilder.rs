@@ -6,7 +6,7 @@ use alloy::{
 };
 use eyre::Result;
 
-use crate::{mempool::MemPool, shutdownconfig::ShutdownConfig};
+use super::{mempool::MemPool, shutdownconfig::ShutdownConfig};
 
 #[derive(Default)]
 pub struct MemPoolBuilder {

@@ -12,7 +12,7 @@ use alloy::{
 
 use IERC20Token::IERC20TokenInstance;
 
-use crate::executor::Executor;
+use super::executor::Executor;
 
 sol!(
     #[sol(rpc)]
@@ -104,8 +104,7 @@ pub fn transfer<P: Provider<Http<reqwest::Client>>>(
 mod tests {
     use super::*;
 
-    use crate::addresses;
-    use crate::setup;
+    use crate::utils::{addresses, setup};
 
     #[tokio::test]
     async fn check_balance_zero() {

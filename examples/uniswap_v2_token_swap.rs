@@ -5,7 +5,12 @@ use alloy::{
     providers::{Provider, ProviderBuilder},
 };
 use eyre::Result;
-use jit_liquidity_rust::{addresses, config, erc20, executor::Executor, pow, router02, utils};
+use jit_liquidity_rust::{
+    config::runconfig,
+    interfaces::{erc20, executor::Executor, router02},
+    pow,
+    utils::{addresses, blockchain_utils},
+};
 
 // Main function to execute the liquidity operations
 #[tokio::main]
@@ -13,7 +18,7 @@ async fn main() -> Result<()> {
     const BASE: u64 = 10;
     const DECIMALS: u64 = 18;
 
-    let config = config::Config::load();
+    let config = runconfig::Config::load();
     let wallet = EthereumWallet::from(config.signer);
     let client = config.address;
 
@@ -105,7 +110,7 @@ async fn main() -> Result<()> {
             amount_in,
             amount_out_min,
             client,
-            utils::get_block_timestamp_future(&provider, 60).await?,
+            blockchain_utils::get_block_timestamp_future(&provider, 60).await?,
         ),
     )
     .send()
@@ -119,7 +124,7 @@ async fn main() -> Result<()> {
             amount_in,
             amount_out_min,
             client,
-            utils::get_block_timestamp_future(&provider, 60).await?,
+            blockchain_utils::get_block_timestamp_future(&provider, 60).await?,
         ),
     )
     .send()

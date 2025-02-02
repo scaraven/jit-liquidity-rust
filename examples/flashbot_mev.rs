@@ -8,13 +8,16 @@ use alloy::{
     transports::http::reqwest::Url,
 };
 use eyre::Result;
+
 use jit_liquidity_rust::{
-    addresses, config,
-    mev::{
+    config::runconfig,
+    flashbots_share::{
         jit_bundler::{IExecutor, UniswapV3LiquidityBundler},
-        FlashBotMev,
+        mev::FlashBotMev,
     },
+    utils::addresses,
 };
+
 use revm::primitives::U256;
 
 #[tokio::main]
@@ -26,7 +29,7 @@ async fn main() -> Result<()> {
     let executor = addresses::get_address("0x840EE4C41De0792Af6aD223D73De591218432D72")?;
 
     // Build a provider
-    let config = config::Config::load();
+    let config = runconfig::Config::load();
     let wallet = EthereumWallet::from(config.signer);
 
     let provider = ProviderBuilder::new()

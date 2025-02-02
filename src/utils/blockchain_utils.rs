@@ -57,7 +57,7 @@ pub fn calculate_slot_mapping(info: Vec<u8>, slot_value: u8) -> U256 {
 
 #[cfg(test)]
 mod tests {
-    use crate::setup;
+    use crate::utils::setup;
 
     use super::*;
 

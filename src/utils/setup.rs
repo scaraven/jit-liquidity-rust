@@ -12,7 +12,7 @@ use alloy::{
     },
 };
 
-use crate::testconfig;
+use crate::config::testconfig;
 use eyre::Result;
 
 /// Setup a provider with an Anvil instance.

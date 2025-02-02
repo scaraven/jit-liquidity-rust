@@ -9,7 +9,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use crate::{shutdownconfig::ShutdownConfig, subscribefilter::ShallowFilter};
+use super::{shutdownconfig::ShutdownConfig, subscribefilter::ShallowFilter};
 
 pub struct MemPool {
     provider: Arc<dyn Provider<PubSubFrontend>>,
@@ -100,12 +100,13 @@ impl MemPool {
 #[cfg(test)]
 mod tests {
 
-    use subscribefilter::ShallowFilterType;
-
     use crate::{
-        alchemy::AlchemyProvider,
-        membuilder::{create_ws_provider, MemPoolBuilder},
-        subscribefilter, testconfig,
+        config::testconfig,
+        providers::alchemy::AlchemyProvider,
+        watcher::{
+            membuilder::{create_ws_provider, MemPoolBuilder},
+            subscribefilter::ShallowFilterType,
+        },
     };
 
     use super::*;

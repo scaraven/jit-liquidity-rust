@@ -71,7 +71,7 @@ mod tests {
     use alloy::hex::FromHex;
     use revm::primitives::{Account, Bytes, HashMap, Output, SuccessReason};
 
-    use crate::addresses;
+    use crate::utils::addresses;
 
     use super::*;
 
