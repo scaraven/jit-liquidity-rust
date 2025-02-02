@@ -27,7 +27,7 @@ async fn main() -> Result<()> {
 
     println!("Listening for transactions...");
 
-    // Filter for transactions to a uniswap v3 manager
+    // Filter for transactions to usdc
     let usdc = addresses::get_address("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")?;
     let (handle, mut recv, config) = pool.subscribe(ShallowFilterType::Recipient(usdc)).await?;
 
