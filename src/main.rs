@@ -1,10 +1,17 @@
 use std::sync::Arc;
 
-use alloy::{network::EthereumWallet, providers::ProviderBuilder, transports::http::reqwest::Url};
+use alloy::{
+    network::EthereumWallet,
+    providers::{Provider, ProviderBuilder, WalletProvider},
+    transports::http::reqwest::Url,
+};
 use eyre::Result;
 use jit_liquidity_rust::{
     config::runconfig,
-    flashbots_share::jit_bundler::{IExecutor, UniswapV3LiquidityBundler},
+    flashbots_share::{
+        jit_bundler::{IExecutor, UniswapV3LiquidityBundler},
+        mev::FlashBotMev,
+    },
     providers::alchemy::AlchemyProvider,
     utils::addresses,
     watcher::{
@@ -12,6 +19,7 @@ use jit_liquidity_rust::{
         subscribefilter::ShallowFilterType,
     },
 };
+use tokio::signal;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -22,7 +30,8 @@ async fn main() -> Result<()> {
     ));
 
     // Put in your deployed executor address here!
-    let executor = addresses::get_address("0x840EE4C41De0792Af6aD223D73De591218432D72")?;
+    // TODO: Redeploy executor to contain correct UniswapV3 pool address
+    let executor = addresses::get_address("0x25761766b35ed72174450c9678dc2694d6b2e740")?;
 
     let wallet = EthereumWallet::from(config.signer);
 
@@ -39,7 +48,7 @@ async fn main() -> Result<()> {
         ProviderBuilder::new()
             .with_recommended_fillers()
             .wallet(EthereumWallet::from(flashbot_signer.clone()))
-            .on_http(Url::parse("https://relay.flashbots.net").unwrap()),
+            .on_http(Url::parse("https://relay-sepolia.flashbots.net").unwrap()),
     );
 
     // Create provider instance
@@ -51,23 +60,42 @@ async fn main() -> Result<()> {
     println!("Listening for transactions...");
 
     // Filter for transactions to uniswap v3 manager
-    let manager = addresses::get_address("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")?;
-    let (handle, mut recv, config) = pool
+    let manager = addresses::get_address("0x1238536071E1c677A632429e3655c799b22cDA52")?;
+    let (handle, mut recv, _config) = pool
         .subscribe(ShallowFilterType::Recipient(manager))
         .await?;
 
-    tokio::spawn(async move {
-        while let Some(tx) = recv.recv().await {
-            // Bundle transaction
-            let bundler =
-                UniswapV3LiquidityBundler::new(IExecutor::new(executor, provider.clone()));
+    loop {
+        tokio::select! {
+            Some(tx) = recv.recv() => {
+                println!("Received transaction: {:#?}", tx);
+                // Bundle transaction
+                let bundler = UniswapV3LiquidityBundler::new(IExecutor::new(executor, provider.clone()));
+
+                let mev = FlashBotMev::new(
+                    provider.clone(),
+                    flashbot_provider.clone(),
+                    provider.wallet(),
+                    flashbot_signer.clone(),
+                    bundler,
+                    tx,
+                );
+
+                let block_number = provider.get_block_number().await.unwrap();
+
+                let response = mev.sim_bundle(block_number).await;
+
+                println!("{:#?}", response);
+            },
+            _ = signal::ctrl_c() => {
+                println!("Ctrl+C pressed, exiting...");
+                break;
+            }
         }
-    });
+    }
 
     // Wait for handle to finish
     let _ = handle.await;
-
-    todo!();
 
     Ok(())
 }
