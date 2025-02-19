@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use alloy::{
     network::EthereumWallet,
@@ -7,7 +7,7 @@ use alloy::{
 };
 use eyre::Result;
 use jit_liquidity_rust::{
-    config::runconfig,
+    config::testnetconfig,
     flashbots_share::{
         jit_bundler::{IExecutor, UniswapV3LiquidityBundler},
         mev::FlashBotMev,
@@ -19,14 +19,14 @@ use jit_liquidity_rust::{
         subscribefilter::ShallowFilterType,
     },
 };
-use tokio::signal;
+use tokio::{signal, time::sleep};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = runconfig::Config::load();
+    let config = testnetconfig::Config::load();
 
     let ws_provider = Arc::new(AlchemyProvider::new(
-        create_ws_provider(&config.rpc_url_ws.expect("WS URL not set")).await?,
+        create_ws_provider(&config.rpc_url_ws.expect("SEPOLIA WS URL not set")).await?,
     ));
 
     // Put in your deployed executor address here!
@@ -59,43 +59,55 @@ async fn main() -> Result<()> {
 
     println!("Listening for transactions...");
 
-    // Filter for transactions to uniswap v3 manager
-    let manager = addresses::get_address("0x1238536071E1c677A632429e3655c799b22cDA52")?;
-    let (handle, mut recv, _config) = pool
+    // Filter for transactions to uniswap v3 manager on sepolia
+    let manager = addresses::get_address("0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD")?;
+    let (_handle, mut recv, _config) = pool
         .subscribe(ShallowFilterType::Recipient(manager))
         .await?;
 
     loop {
         tokio::select! {
-            Some(tx) = recv.recv() => {
-                println!("Received transaction: {:#?}", tx);
-                // Bundle transaction
-                let bundler = UniswapV3LiquidityBundler::new(IExecutor::new(executor, provider.clone()));
-
-                let mev = FlashBotMev::new(
-                    provider.clone(),
-                    flashbot_provider.clone(),
-                    provider.wallet(),
-                    flashbot_signer.clone(),
-                    bundler,
-                    tx,
-                );
-
-                let block_number = provider.get_block_number().await.unwrap();
-
-                let response = mev.sim_bundle(block_number).await;
-
-                println!("{:#?}", response);
-            },
+            // Allow early exit when Ctrl+C is pressed
             _ = signal::ctrl_c() => {
                 println!("Ctrl+C pressed, exiting...");
-                break;
+                return Ok(()); // Exit the program
+            },
+            // Wait until the channel is not empty, then receive a transaction.
+            tx = async {
+                loop {
+                    // Check if the channel is not empty.
+                    if !recv.is_empty() {
+                        // Now that we know something’s waiting, await the receive.
+                        return recv.recv().await;
+                    }
+                    // Pause briefly to avoid a busy loop.
+                    sleep(Duration::from_millis(50)).await;
+                }
+            } => {
+                if let Some(tx) = tx {
+                    println!("Received transaction: {:#?}", tx);
+                    // Bundle transaction:
+                    let bundler = UniswapV3LiquidityBundler::new(
+                        IExecutor::new(executor, provider.clone())
+                    );
+
+                    let mev = FlashBotMev::new(
+                        provider.clone(),
+                        flashbot_provider.clone(),
+                        provider.wallet(),
+                        flashbot_signer.clone(),
+                        bundler,
+                        tx,
+                    );
+
+                    let block_number = provider.get_block_number().await.unwrap();
+                    let response = mev.sim_bundle(block_number).await;
+
+                    println!("{:#?}", response);
+                }
             }
         }
     }
-
-    // Wait for handle to finish
-    let _ = handle.await;
 
     Ok(())
 }
