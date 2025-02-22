@@ -10,6 +10,7 @@ pub trait ShallowFilter {
 pub enum ShallowFilterType {
     Recipient(Address),
     CallData(Bytes),
+    From(Address),
     None,
 }
 
@@ -17,10 +18,16 @@ impl ShallowFilter for ShallowFilterType {
     fn filter(&self, tx: &Transaction) -> bool {
         match self {
             ShallowFilterType::Recipient(addr) => filter_by_addr(tx, addr),
+            ShallowFilterType::From(addr) => filter_by_caller(tx, addr),
             ShallowFilterType::None => true,
             ShallowFilterType::CallData(data) => filter_by_data(tx, data),
         }
     }
+}
+
+fn filter_by_caller(tx: &Transaction, expected: &Address) -> bool {
+    let from = tx.from;
+    from == *expected
 }
 
 fn filter_by_addr(tx: &Transaction, expected: &Address) -> bool {

@@ -104,10 +104,14 @@ where
         let task = EngineTask::new(provider, vec![tx]);
         let result = task.consume();
 
+        println!("Result: {:?}", result);
+
         // Extract ResultAndState and assert we have no errors
         let result = result
             .first()
             .ok_or_else(|| eyre::eyre!("No result found"))?;
+
+        println!("Result: {:?}", result);
         let logs = decode_uniswapv3_logs(result.as_ref().unwrap().result.clone())?;
 
         // For now assert that we only have one Swap log
