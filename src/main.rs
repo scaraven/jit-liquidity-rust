@@ -60,7 +60,7 @@ async fn main() -> Result<()> {
     println!("Listening for transactions...");
 
     // Filter for transactions to uniswap v3 manager on sepolia
-    let swap_router = addresses::get_address("0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD")?;
+    let _swap_router = addresses::get_address("0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD")?;
     let watch_wallet = addresses::get_address("0x1b20fc948704B459801516B24546bE3d470570bE")?;
     let (_handle, mut recv, _config) = pool
         .subscribe(ShallowFilterType::From(watch_wallet))
@@ -104,7 +104,7 @@ async fn main() -> Result<()> {
                     let block_number = provider.get_block_number().await.unwrap();
                     let response = mev.sim_bundle(block_number).await;
 
-                    println!("{:#?}", response);
+                    println!("Response: {:#?}", response);
                 }
             }
         }
