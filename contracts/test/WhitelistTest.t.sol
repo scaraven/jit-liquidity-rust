@@ -28,7 +28,10 @@ contract WhitelistTest is Test {
         whitelist = new Whitelist(alice, FACTORY);
     }
 
-    function testAddToWhitelist() public {
+    function testAddToWhitelist(address random) public {
+        // ensure the fuzzed address isn't alice
+        vm.assume(random != alice);
+
         vm.startPrank(alice);
 
         // Test adding an address to the whitelist
@@ -37,9 +40,9 @@ contract WhitelistTest is Test {
         assert(whitelist.checkWhitelist(POOL_ADDR));
         vm.stopPrank();
 
-        // Test adding an address to the whitelist with a non-owner
-        vm.startPrank(bob);
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, bob));
+        // Test adding an address to the whitelist with a non-owner (fuzzed)
+        vm.startPrank(random);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, random));
         whitelist.addWhitelist(POOL_ADDR);
         vm.stopPrank();
 
@@ -51,15 +54,17 @@ contract WhitelistTest is Test {
         vm.stopPrank();
     }
 
-    function testRemoveFromWhitelist() public {
+    function testRemoveFromWhitelist(address random) public {
+        vm.assume(random != alice);
+
         vm.startPrank(alice);
         // Test adding an address to the whitelist
         whitelist.addWhitelist(POOL_ADDR);
         vm.stopPrank();
 
         // Assert that a non-owner cannot remove an address from the whitelist
-        vm.startPrank(bob);
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, bob));
+        vm.startPrank(random);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, random));
         whitelist.removeWhitelist(POOL_ADDR);
         vm.stopPrank();
 
