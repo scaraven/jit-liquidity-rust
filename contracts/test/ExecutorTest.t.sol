@@ -94,6 +94,14 @@ contract ExecutorTest is Test {
         assertEq(metric.tickUpper, 193680);
     }
 
+    function testExecutionWrongAddress(address random) public {
+        // ensure the fuzzed address isn't the known pool address
+        vm.assume(random != POOL_ADDR);
+
+        vm.expectRevert("EXECUTOR: Pool not whitelisted");
+        executor.execute(random);
+    }
+
     function testExecuteFailure() public {
         executor.execute(POOL_ADDR);
 

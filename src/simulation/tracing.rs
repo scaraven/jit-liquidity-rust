@@ -81,6 +81,7 @@ where
     revm_call_internal(cache_db, desired_tx, true)
 }
 
+#[allow(dead_code)]
 pub fn revm_call_read_only<T, N, P>(
     cache_db: &mut CacheDB<AlloyDB<T, N, Arc<P>>>,
     desired_tx: TransactionRequest,

@@ -157,9 +157,8 @@ contract Executor is IExecutor, Ownable {
 
         // Burn liquidity and then collect tokens
         IUniswapV3Pool(_position.pool).burn(_position.tickLower, _position.tickUpper, _position.liquidity);
-        IUniswapV3Pool(_position.pool).collect(
-            address(this), _position.tickLower, _position.tickUpper, type(uint128).max, type(uint128).max
-        );
+        IUniswapV3Pool(_position.pool)
+            .collect(address(this), _position.tickLower, _position.tickUpper, type(uint128).max, type(uint128).max);
 
         // End benchmark
         address[] memory tokens = new address[](3);
